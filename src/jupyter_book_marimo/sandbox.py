@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import tempfile
 from typing import TYPE_CHECKING
 
@@ -16,20 +18,23 @@ else:
         from marimo._utils.inline_script_metadata import PyProjectReader
 
 
-def uv_run_args(header: str) -> list[str]:
+@contextmanager
+def uv_run_args(pyproject: str) -> Iterator[list[str]]:
     """Build the ``uv run`` argument list for one document.
 
-    The plugin passes dependency declarations as raw metadata text. We first
+    The plugin passes dependency declarations as raw pyproject text. We first
     wrap that in inline script metadata so dependency resolution follows
-    marimo's existing sandbox rules instead of a second copy of the same logic
-    here.
+    marimo's existing sandbox rules instead of reimplementing them here.
     """
-    if not header.startswith("#"):
-        header = "\n# ".join(["# /// script", *header.splitlines(), "///"])
-    pyproject = PyProjectReader.from_script(header)
-    with tempfile.NamedTemporaryFile(
-        mode="w", delete=False, suffix=".txt"
-    ) as temp_file:
-        flags = construct_uv_flags(pyproject, temp_file, [], [])
-        temp_file.flush()
-    return ["run"] + flags  # type: ignore[no-any-return]
+    if pyproject.lstrip().startswith("# /// script"):
+        script_metadata = pyproject
+    else:
+        script_metadata = "\n# ".join(["# /// script", *pyproject.splitlines(), "///"])
+    pyproject_reader = PyProjectReader.from_script(script_metadata)
+    with tempfile.TemporaryDirectory(prefix="jupyter-book-marimo-") as temp_dir:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, dir=temp_dir, suffix=".txt"
+        ) as temp_file:
+            flags = construct_uv_flags(pyproject_reader, temp_file, [], [])
+            temp_file.flush()
+        yield ["run", *flags]  # type: ignore[misc]

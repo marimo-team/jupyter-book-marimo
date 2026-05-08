@@ -19,6 +19,12 @@ def test_parse_code_meta_reads_fence_options() -> None:
     }
 
 
+def test_parse_code_meta_keeps_fence_language_authoritative() -> None:
+    assert parse_code_meta("python", '{.marimo language="sql"}') == {
+        "language": "python"
+    }
+
+
 def test_parse_code_meta_ignores_plain_python_fences() -> None:
     assert parse_code_meta("python", None) is None
     assert parse_code_meta("python", "{}") is None

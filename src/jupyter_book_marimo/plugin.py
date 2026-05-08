@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import sys
+from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 from shutil import copyfileobj
@@ -114,6 +115,18 @@ def source_files(root: Path) -> list[Path]:
     ]
 
 
+@lru_cache(maxsize=None)
+def parsed_source_pages(root: Path) -> tuple[SourcePage, ...]:
+    pages: list[SourcePage] = []
+    for path in source_files(root):
+        try:
+            source = path.read_text()
+        except OSError:
+            continue
+        pages.append(source_page(source))
+    return tuple(pages)
+
+
 def code_signature(node: dict[str, Any]) -> tuple[int, str, str] | None:
     if node.get("type") != "code":
         return None
@@ -156,12 +169,7 @@ def source_page_context(
     best_score = 0
 
     lookup: dict[tuple[int, str, str], CellOptions] = {}
-    for path in source_files(Path.cwd()):
-        try:
-            source = path.read_text()
-        except OSError:
-            continue
-        page = source_page(source)
+    for page in parsed_source_pages(Path.cwd()):
         if signatures is not None:
             score = sum(
                 (fence.start_line, fence.language, fence.code) in signatures

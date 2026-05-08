@@ -128,6 +128,7 @@ def parse_code_meta(language: str, meta: str | None) -> CellOptions | None:
     is_marimo, options = parse_attribute_tokens(tokenize_info(text[1:-1].strip()))
     if not is_marimo:
         return None
+    options.pop("language", None)
     return {"language": language, **options}
 
 

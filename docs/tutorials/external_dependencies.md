@@ -14,7 +14,7 @@ options:
 
 # External dependencies
 
-By default, `quarto-marimo` creates a sandboxed Python environment with `uv`.
+By default, `jupyter-book-marimo` creates a sandboxed Python environment with `uv`.
 To add a package for one document, declare it in the document frontmatter
 under `options.marimo.pyproject`.
 
@@ -33,7 +33,7 @@ options:
 
 After that, you can import the package normally inside marimo cells. If the
 package exposes an anywidget, wrap it with `mo.ui.anywidget` so marimo
-can keep the UI reactive in Quarto output.
+can keep the UI reactive in Jupyter Book output.
 
 ## Example: `wigglystuff.Slider2D`
 

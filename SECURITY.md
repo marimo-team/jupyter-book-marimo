@@ -13,7 +13,7 @@ Only the latest release of `jupyter-book-marimo` receives security fixes.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Report vulnerabilities via [GitHub's private security advisory feature](https://github.com/marimo-team/marimo/security/advisories/new).
+Report vulnerabilities via [GitHub's private security advisory feature](https://github.com/marimo-team/jupyter-book-marimo/security/advisories/new).
 
 We aim to:
 - Acknowledge receipt within **3 business days**

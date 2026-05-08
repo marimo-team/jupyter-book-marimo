@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from jupyter_book_marimo.plugin import (
     CONTAINER_WIDGET,
+    parsed_source_pages,
     run_transform,
     source_fence_lookup,
     source_page_context,
@@ -75,6 +76,7 @@ x = 1
     }
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    parsed_source_pages.cache_clear()
     metadata, lookup = source_page_context(tree)
 
     assert metadata == {"pyproject": 'dependencies = ["marimo>=0.23.5"]'}
@@ -146,6 +148,7 @@ def test_source_fence_lookup_scans_markdown_sources(
     )
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    parsed_source_pages.cache_clear()
     fixture = source_fence_lookup()
 
     assert fixture[(3, "python", "x = 1")] == {
@@ -176,9 +179,45 @@ def test_source_fence_lookup_uses_current_tree_to_pick_page(
     }
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    parsed_source_pages.cache_clear()
     fixture = source_fence_lookup(tree)
 
     assert fixture == {(3, "python", "y = 2"): {"language": "python", "editor": True}}
+
+
+def test_source_page_context_caches_source_parsing(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "page.md").write_text(
+        '# Title\n\n```python {.marimo hide_code="true"}\nx = 1\n```\n'
+    )
+    tree = {
+        "type": "root",
+        "children": [
+            {
+                "type": "code",
+                "lang": "python",
+                "value": "x = 1",
+                "position": {"start": {"line": 3}},
+            }
+        ],
+    }
+    calls = 0
+    original_source_files = __import__(
+        "jupyter_book_marimo.plugin", fromlist=["source_files"]
+    ).source_files
+
+    def counted_source_files(root: Path) -> list[Path]:
+        nonlocal calls
+        calls += 1
+        return original_source_files(root)
+
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    monkeypatch.setattr("jupyter_book_marimo.plugin.source_files", counted_source_files)
+    parsed_source_pages.cache_clear()
+
+    source_page_context(tree)
+    source_page_context(tree)
+
+    assert calls == 1
 
 
 def test_public_docs_use_plain_language_fence_api() -> None:

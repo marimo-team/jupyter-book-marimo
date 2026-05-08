@@ -47,6 +47,32 @@ def test_source_for_sql_cell_uses_inferred_language() -> None:
     assert "select * from numbers" in source
 
 
+def test_disabled_sql_fallback_displays_original_source() -> None:
+    result = asyncio.run(
+        extract.extract(
+            {
+                "file": "docs/tutorials/test.md",
+                "metadata": {},
+                "cells": [
+                    {
+                        "code": "select * from numbers",
+                        "options": {
+                            "language": "sql",
+                            "disabled": True,
+                            "echo": True,
+                        },
+                    }
+                ],
+            }
+        )
+    )
+
+    html = result["outputs"][0]["html"]
+    assert "select * from numbers" in html
+    assert "language-sql" in html
+    assert "mo.sql" not in html
+
+
 def test_as_bool_defaults_missing_values() -> None:
     assert extract.as_bool(None, True) is True
     assert extract.as_bool(None) is False
@@ -97,6 +123,32 @@ def test_browser_notebook_uses_page_cell_prefix() -> None:
 
     assert "from marimo._ast.cell_manager import CellManager" in rewritten
     assert 'app._cell_manager = CellManager(prefix="jbpage")' in rewritten
+
+
+def test_browser_notebook_cell_prefix_handles_formatted_app_constructor() -> None:
+    notebook_code = "\n".join(
+        [
+            "import marimo as mo",
+            "import marimo",
+            "",
+            'app = marimo.App(width="full")',
+            "",
+        ]
+    )
+
+    rewritten = extract.install_browser_cell_prefix(notebook_code, "jbpage")
+
+    assert 'app = marimo.App(width="full")' in rewritten
+    assert 'app._cell_manager = CellManager(prefix="jbpage")' in rewritten
+
+
+def test_browser_notebook_cell_prefix_reports_missing_app_constructor() -> None:
+    try:
+        extract.install_browser_cell_prefix("import marimo\n", "jbpage")
+    except ValueError as exc:
+        assert "cell prefix" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_extract_repeats_runtime_fields_for_executable_cells() -> None:

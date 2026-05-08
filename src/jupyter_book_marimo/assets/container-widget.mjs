@@ -482,6 +482,15 @@ function stripHeadOnlyNodes(fragment) {
     .forEach((node) => node.remove());
 }
 
+function deferServerRuntimeElements(fragment) {
+  fragment
+    .querySelectorAll("marimo-anywidget, marimo-mime-renderer, marimo-table")
+    .forEach((node) => {
+      const placeholder = loadingNode();
+      node.replaceWith(placeholder);
+    });
+}
+
 function clearHost(host) {
   host
     .querySelectorAll(`:scope > .${outputClass}`)
@@ -550,6 +559,7 @@ function mountMarimo(model, el) {
   let releaseAppRecord = () => {};
 
   stripHeadOnlyNodes(output.body);
+  deferServerRuntimeElements(output.body);
   ensureThemeStyle();
   ensureDocumentNavigation();
   mount.replaceChildren(loadingNode());

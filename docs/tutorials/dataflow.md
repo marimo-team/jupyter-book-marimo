@@ -128,7 +128,7 @@ mo.md(
 ```
 
 🌊 **Try it!** In the above cells, try changing the value `period` or
-`ampltitude`, then click the run button ( ▷ ) to register your changes.
+`amplitude`, then click the run button ( ▷ ) to register your changes.
 See what happens to the sine wave.
 <!---->
 

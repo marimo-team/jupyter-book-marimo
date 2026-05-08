@@ -188,17 +188,25 @@ def install_browser_cell_prefix(notebook_code: str, cell_prefix: str) -> str:
     """Make browser-generated cell IDs match the server export."""
     import_line = "from marimo._ast.cell_manager import CellManager\n"
     if import_line not in notebook_code:
-        notebook_code = notebook_code.replace(
-            "import marimo\n",
-            f"import marimo\n{import_line}",
-            1,
+        notebook_code, import_count = re.subn(
+            r"^import marimo(?:\s+as\s+\w+)?\n",
+            lambda match: f"{match.group(0)}{import_line}",
+            notebook_code,
+            count=1,
+            flags=re.MULTILINE,
         )
-    updated = notebook_code.replace(
-        "app = marimo.App()\n",
-        f'app = marimo.App()\napp._cell_manager = CellManager(prefix="{cell_prefix}")\n',
-        1,
+        if import_count == 0:
+            raise ValueError("Could not find marimo import in marimo code")
+    updated, app_count = re.subn(
+        r"^app\s*=\s*marimo\.App\([^)\n]*\)\s*\n",
+        lambda match: (
+            f'{match.group(0)}app._cell_manager = CellManager(prefix="{cell_prefix}")\n'
+        ),
+        notebook_code,
+        count=1,
+        flags=re.MULTILINE,
     )
-    if updated == notebook_code:
+    if app_count == 0:
         raise ValueError("Could not install browser cell prefix in marimo code")
     return updated
 
@@ -249,6 +257,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     for index, cell in enumerate(cells):
         options = normalized_options(cell.get("options") or {})
         language = str(options.get("language") or "python").lower()
+        original_code = str(cell.get("code") or "")
         code = source_for_cell(cell)
         display_code = (
             as_bool(options.get("echo")) or as_bool(options.get("editor"))
@@ -274,7 +283,9 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
                 message = "unparseable"
             outputs.append(
                 output_model(
-                    visible_code_html(code, language, message) if display_code else ""
+                    visible_code_html(original_code, language, message)
+                    if display_code
+                    else ""
                 )
             )
             continue
@@ -293,7 +304,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             outputs.append(
                 output_model(
                     visible_code_html(
-                        code,
+                        original_code,
                         language,
                         "could not compile",
                     )
