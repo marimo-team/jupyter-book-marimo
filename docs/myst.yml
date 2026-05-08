@@ -1,0 +1,47 @@
+# See docs at: https://mystmd.org/guide/frontmatter
+version: 1
+
+project:
+  id: e26b9be9-1ef3-4e13-b184-659841b4701c
+  title: marimo + jupyter-book
+  description: Reactive marimo cells rendered inside Jupyter Book pages.
+  github: https://github.com/marimo-team/jupyter-book-marimo
+  keywords:
+    - marimo
+    - Jupyter Book
+    - MyST
+    - reactive notebooks
+  exclude:
+    # Generated serving copy for the anywidget bridge.
+    - .jupyter-book-marimo/**
+    - _build/**
+    - _site/**
+  plugins:
+    - type: executable
+      path: ../.venv/bin/jupyter-book-marimo
+  toc:
+    - file: index.md
+      title: Guide
+    - file: tutorials/index.md
+      title: Tutorials
+      children:
+        - file: tutorials/intro.md
+        - file: tutorials/dataflow.md
+        - file: tutorials/ui.md
+        - file: tutorials/markdown.md
+        - file: tutorials/plots.md
+        - file: tutorials/layout.md
+        - file: tutorials/fileformat.md
+        - file: tutorials/external_dependencies.md
+        - file: tutorials/sql.md
+        - file: tutorials/markdown_format.md
+        - file: tutorials/for_jupyter_users.md
+
+site:
+  template: book-theme
+  title: marimo + jupyter-book
+  options:
+    folders: true
+  nav: []
+  actions: []
+  domains: []
