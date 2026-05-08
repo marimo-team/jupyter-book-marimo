@@ -1,0 +1,28 @@
+[project]
+name = "jupyter-book-marimo"
+version = "0.1.0"
+description = "Render marimo cells as hydrated islands in Jupyter Book."
+readme = "README.md"
+authors = [
+    { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "marimo>=0.23.5",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+jupyter-book-marimo = "jupyter_book_marimo:main"
+
+[build-system]
+requires = ["uv_build>=0.11.10,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "jupyter-book>=2.1.5",
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+    "ty>=0.0.34",
+]
