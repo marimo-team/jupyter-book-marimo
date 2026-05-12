@@ -11,6 +11,7 @@ from jupyter_book_marimo.plugin import (
     CONTAINER_WIDGET,
     STYLESHEETS_ENV,
     SourceContext,
+    parsed_source_pages,
     source_page_context,
     stylesheets_from_env,
     transform_document,
@@ -271,7 +272,27 @@ def test_source_page_context_uses_current_tree_to_pick_page(
     }
 
 
-def test_source_page_context_rereads_source_pages(tmp_path: Path, monkeypatch) -> None:
+def test_parsed_source_pages_reads_markdown_as_utf8(
+    tmp_path: Path, monkeypatch
+) -> None:
+    page = tmp_path / "page.md"
+    page.write_text("# Café\n\n```python {.marimo}\nx = 1\n```\n", encoding="utf-8")
+    read_encodings: list[str | None] = []
+    original_read_text = Path.read_text
+
+    def read_text(path: Path, *args, **kwargs):
+        read_encodings.append(kwargs.get("encoding"))
+        return original_read_text(path, *args, **kwargs)
+
+    parsed_source_pages.cache_clear()
+    monkeypatch.setattr(Path, "read_text", read_text)
+
+    parsed_source_pages(tmp_path.resolve())
+
+    assert read_encodings == ["utf-8"]
+
+
+def test_source_page_context_reuses_source_pages(tmp_path: Path, monkeypatch) -> None:
     page = tmp_path / "page.md"
     page.write_text('# Title\n\n```python {.marimo hide_code="true"}\nx = 1\n```\n')
     tree = {
@@ -287,6 +308,7 @@ def test_source_page_context_rereads_source_pages(tmp_path: Path, monkeypatch) -
     }
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    parsed_source_pages.cache_clear()
 
     first_context = source_page_context(tree)
     page.write_text('# Title\n\n```python {.marimo editor="true"}\nx = 1\n```\n')
@@ -298,7 +320,7 @@ def test_source_page_context_rereads_source_pages(tmp_path: Path, monkeypatch) -
     }
     assert second_context.options_by_signature[(3, "python", "x = 1")] == {
         "language": "python",
-        "editor": True,
+        "hide_code": True,
     }
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 from importlib.resources import files
 import json
@@ -103,11 +104,12 @@ def source_files(root: Path) -> list[Path]:
     ]
 
 
+@lru_cache(maxsize=16)
 def parsed_source_pages(root: Path) -> tuple[SourcePage, ...]:
     pages: list[SourcePage] = []
     for path in source_files(root):
         try:
-            source = path.read_text()
+            source = path.read_text(encoding="utf-8")
         except OSError:
             continue
         pages.append(SourcePage(metadata={}, fences=source_fences(source), path=path))
@@ -161,7 +163,9 @@ def source_page_context(
 
     lookup: dict[CodeSignature, CellOptions] = {}
     source_pages = (
-        pages if pages is not None else parsed_source_pages(root or Path.cwd())
+        pages
+        if pages is not None
+        else parsed_source_pages((root or Path.cwd()).resolve())
     )
     for page in source_pages:
         if signatures is not None:
