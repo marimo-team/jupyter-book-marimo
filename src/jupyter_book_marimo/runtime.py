@@ -3,28 +3,76 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Generator
+from contextlib import contextmanager, redirect_stdout
+import importlib
 import json
+import os
 import shlex
 import subprocess
 import sys
 from pathlib import Path
+import tempfile
 from typing import Any
 
-from .extract import extract
-from .sandbox import uv_run_args
+from .authoring import pyproject_to_script_metadata
 
 UV_RUN_TIMEOUT_SECONDS = 300
 
 
-def extractor_path() -> Path:
-    return Path(__file__).with_name("extract.py")
+async def extract(payload: dict[str, Any]) -> dict[str, Any]:
+    from .extract import extract as real_extract
+
+    return await real_extract(payload)
+
+
+def source_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def sandbox_env() -> dict[str, str]:
+    env = os.environ.copy()
+    pythonpath = env.get("PYTHONPATH")
+    paths = [str(source_root())]
+    if pythonpath:
+        paths.append(pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(paths)
+    return env
+
+
+@contextmanager
+def uv_run_args(pyproject: str) -> Generator[list[str], None, None]:
+    """Build the ``uv run`` argument list for one document."""
+    try:
+        sandbox_module = importlib.import_module("marimo._internal.sandbox")
+    except ImportError:
+        sandbox_module = importlib.import_module("marimo._cli.sandbox")
+        metadata_module = importlib.import_module(
+            "marimo._utils.inline_script_metadata"
+        )
+        pyproject_reader = metadata_module.PyProjectReader
+    else:
+        pyproject_reader = sandbox_module.PyProjectReader
+
+    script_metadata = pyproject_to_script_metadata(pyproject)
+    pyproject_config = pyproject_reader.from_script(script_metadata)
+    with tempfile.TemporaryDirectory(prefix="jupyter-book-marimo-") as temp_dir:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, dir=temp_dir, suffix=".txt"
+        ) as temp_file:
+            flags = sandbox_module.construct_uv_flags(
+                pyproject_config, temp_file, [], []
+            )
+            temp_file.flush()
+        yield ["run", *flags]  # type: ignore[misc]
 
 
 def run_extractor(payload: dict[str, Any]) -> dict[str, Any]:
-    pyproject = payload.get("metadata", {}).get("pyproject")
+    metadata = payload.get("metadata")
+    pyproject = metadata.get("pyproject") if isinstance(metadata, dict) else None
     if isinstance(pyproject, str) and pyproject.strip():
         with uv_run_args(pyproject) as args:
-            args.extend(["python", str(extractor_path())])
+            args.extend(["python", "-m", "jupyter_book_marimo.extract"])
             command = ["uv", *args]
             try:
                 result = subprocess.run(
@@ -34,6 +82,7 @@ def run_extractor(payload: dict[str, Any]) -> dict[str, Any]:
                     capture_output=True,
                     check=False,
                     timeout=UV_RUN_TIMEOUT_SECONDS,
+                    env=sandbox_env(),
                 )
             except subprocess.TimeoutExpired as exc:
                 raise RuntimeError(
@@ -52,7 +101,8 @@ def run_extractor(payload: dict[str, Any]) -> dict[str, Any]:
                 f"{shlex.join(command)}\n{result.stderr}\n{result.stdout}".strip()
             ) from exc
 
-    return asyncio.run(extract(payload))
+    with redirect_stdout(sys.stderr):
+        return asyncio.run(extract(payload))
 
 
 def main() -> None:

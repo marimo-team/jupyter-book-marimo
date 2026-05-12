@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jupyter_book_marimo.sandbox import uv_run_args
+from jupyter_book_marimo.runtime import uv_run_args
 
 
 def test_uv_run_args_removes_temporary_requirements_file() -> None:

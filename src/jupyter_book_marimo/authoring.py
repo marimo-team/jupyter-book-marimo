@@ -4,12 +4,108 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
 import yaml
 
+ExecutionOptions = dict[str, Any]
+
 CellOptions = dict[str, str | int | float | bool | None]
+
+DEFAULT_EXECUTION_OPTIONS: ExecutionOptions = {
+    "eval": True,
+    "echo": False,
+    "output": True,
+    "warning": True,
+    "error": True,
+    "include": True,
+    "editor": False,
+}
+
+PAGE_EXECUTION_OPTION_KEYS = (
+    *DEFAULT_EXECUTION_OPTIONS.keys(),
+    "hide_code",
+    "hide_output",
+    "disabled",
+    "unparseable",
+    "unparsable",
+)
+
+
+def pyproject_to_script_metadata(pyproject: str) -> str:
+    """Lift document pyproject metadata into marimo's script metadata form."""
+    body = dedent(pyproject).strip()
+    if not body:
+        return ""
+    if body.startswith("# /// script"):
+        return f"{body}\n"
+
+    commented_lines = ["# /// script"]
+    for line in body.splitlines():
+        commented_lines.append(f"# {line}" if line else "#")
+    commented_lines.append("# ///")
+    return "\n".join(commented_lines) + "\n"
+
+
+def as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() == "true"
+    return bool(value)
+
+
+def normalized_options(options: dict[str, Any]) -> ExecutionOptions:
+    return {key.replace("-", "_"): value for key, value in options.items()}
+
+
+def resolved_execution_options(
+    document_options: dict[str, Any],
+    cell_options: dict[str, Any] | None = None,
+) -> ExecutionOptions:
+    """Layer cell options over document options over the shared defaults."""
+    return {
+        **DEFAULT_EXECUTION_OPTIONS,
+        **normalized_options(document_options),
+        **normalized_options(cell_options or {}),
+    }
+
+
+def is_unparseable(config: ExecutionOptions) -> bool:
+    return as_bool(config.get("unparseable")) or as_bool(config.get("unparsable"))
+
+
+def should_execute(config: ExecutionOptions) -> bool:
+    return (
+        as_bool(config.get("eval"), True)
+        and not as_bool(config.get("disabled"))
+        and not is_unparseable(config)
+    )
+
+
+def should_include(config: ExecutionOptions) -> bool:
+    return as_bool(config.get("include"), True)
+
+
+def should_display_code(config: ExecutionOptions) -> bool:
+    if not should_include(config) or as_bool(config.get("hide_code")):
+        return False
+    # marimo currently exposes one island flag for visible code. `echo` is the
+    # Quarto execution option; `editor` is retained as a display-code request
+    # until marimo exposes a separate browser editor affordance for islands.
+    return as_bool(config.get("echo")) or as_bool(config.get("editor"))
+
+
+def should_display_output(config: ExecutionOptions) -> bool:
+    return (
+        should_include(config)
+        and as_bool(config.get("output"), True)
+        and not as_bool(config.get("hide_output"))
+    )
 
 
 @dataclass
@@ -41,8 +137,9 @@ class SourceFence:
 
 @dataclass
 class SourcePage:
-    metadata: dict[str, str]
+    metadata: dict[str, Any]
     fences: list[SourceFence]
+    path: Path | None = None
 
 
 FRONTMATTER_PATTERN = re.compile(
@@ -132,7 +229,26 @@ def parse_code_meta(language: str, meta: str | None) -> CellOptions | None:
     return {"language": language, **options}
 
 
+def parse_braced_fence_info(info: str) -> CellOptions | None:
+    text = info.strip()
+    if not (text.startswith("{") and text.endswith("}")):
+        return None
+    tokens = tokenize_info(text[1:-1].strip())
+    if not tokens:
+        return None
+
+    first, rest = tokens[0], tokens[1:]
+    if first.endswith(".marimo"):
+        language = first.removesuffix(".marimo")
+        return parse_code_meta(language, "{" + " ".join([".marimo", *rest]) + "}")
+    if first in {"python", "py", "python3", "sql", "markdown", "md", "marimo"}:
+        return parse_code_meta(first, "{" + " ".join(rest) + "}")
+    return None
+
+
 def parse_plain_fence_info(info: str) -> CellOptions | None:
+    if braced := parse_braced_fence_info(info):
+        return braced
     match = re.fullmatch(r"(?P<language>\S+)\s+(?P<meta>\{.*\})", info.strip())
     if match is None:
         return None
@@ -145,7 +261,10 @@ def source_fences(source: str) -> list[SourceFence]:
     index = 0
     while index < len(lines):
         line = lines[index]
-        match = re.match(r"^(?P<fence>`{3,}|~{3,})(?P<info>.*)$", line)
+        match = re.match(
+            r"^(?P<indent>[ \t]{0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$",
+            line,
+        )
         if match is None:
             index += 1
             continue
@@ -155,7 +274,8 @@ def source_fences(source: str) -> list[SourceFence]:
         close_index = index + 1
         while close_index < len(lines):
             if re.match(
-                rf"^{re.escape(fence[0])}{{{len(fence)},}}\s*$", lines[close_index]
+                rf"^[ \t]{{0,3}}{re.escape(fence[0])}{{{len(fence)},}}\s*$",
+                lines[close_index],
             ):
                 break
             close_index += 1
@@ -164,16 +284,33 @@ def source_fences(source: str) -> list[SourceFence]:
 
         options = parse_plain_fence_info(info)
         if options is not None:
+            body_lines = strip_fence_body_indent(
+                lines[index + 1 : close_index],
+                match["indent"],
+            )
             fences.append(
                 SourceFence(
                     start_line=index + 1,
                     language=str(options["language"]),
-                    code="\n".join(lines[index + 1 : close_index]),
+                    code="\n".join(body_lines),
                     options=options,
                 )
             )
         index = close_index + 1
     return fences
+
+
+def strip_fence_body_indent(lines: list[str], opening_indent: str) -> list[str]:
+    """Mirror CommonMark's removal of the opening fence indentation."""
+    max_spaces = opening_indent.count(" ")
+    if max_spaces == 0:
+        return lines
+
+    stripped: list[str] = []
+    for line in lines:
+        spaces = len(line) - len(line.lstrip(" "))
+        stripped.append(line[min(spaces, max_spaces) :])
+    return stripped
 
 
 def read_frontmatter(source: str) -> dict[str, Any]:
@@ -194,7 +331,7 @@ def _frontmatter_string(value: Any, key: str) -> str | None:
     return dedent(value).rstrip()
 
 
-def metadata_from_frontmatter(frontmatter: dict[str, Any]) -> dict[str, str]:
+def metadata_from_frontmatter(frontmatter: dict[str, Any]) -> dict[str, Any]:
     options = frontmatter.get("options")
     if options is None:
         return {}
@@ -207,18 +344,22 @@ def metadata_from_frontmatter(frontmatter: dict[str, Any]) -> dict[str, str]:
     if not isinstance(marimo, dict):
         raise ValueError("frontmatter.options.marimo must be a mapping")
 
-    metadata: dict[str, str] = {}
+    metadata: dict[str, Any] = {}
     for key in ("header", "pyproject"):
         value = _frontmatter_string(marimo.get(key), key)
         if value is not None:
             metadata[key] = value
+    for key in PAGE_EXECUTION_OPTION_KEYS:
+        if key in marimo:
+            metadata[key] = parse_scalar(marimo[key])
     return metadata
 
 
-def source_page(source: str) -> SourcePage:
+def source_page(source: str, path: Path | None = None) -> SourcePage:
     return SourcePage(
         metadata=metadata_from_frontmatter(read_frontmatter(source)),
         fences=source_fences(source),
+        path=path,
     )
 
 

@@ -1,3 +1,5 @@
+JBM_STYLESHEETS ?= styles/jupyter-book-marimo.css
+
 .PHONY: format format-check lint typecheck test check build book-build book-start clean
 
 format:
@@ -21,10 +23,10 @@ build:
 	uv build
 
 book-build:
-	cd docs && uv run jupyter-book build --html --strict
+	cd docs && JUPYTER_BOOK_MARIMO_STYLESHEETS="$(JBM_STYLESHEETS)" uv run jupyter-book build --html --strict
 
 book-start:
-	cd docs && uv run jupyter-book start --port 3102 --server-port 4102
+	cd docs && JUPYTER_BOOK_MARIMO_STYLESHEETS="$(JBM_STYLESHEETS)" uv run jupyter-book start --port 3102 --server-port 4102
 
 clean:
 	rm -rf dist _build _site .jupyter-book-marimo docs/_build docs/_site docs/.jupyter-book-marimo

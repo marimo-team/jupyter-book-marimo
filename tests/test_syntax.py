@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from jupyter_book_marimo.syntax import (
+from jupyter_book_marimo.authoring import (
     code_cell_from_node,
     metadata_from_frontmatter,
     parse_code_meta,
@@ -52,6 +52,37 @@ options:
     }
 
 
+def test_metadata_reads_quarto_style_execution_options() -> None:
+    frontmatter = read_frontmatter(
+        """---
+options:
+  marimo:
+    eval: false
+    echo: true
+    output: false
+    warning: false
+    error: true
+    include: true
+    editor: false
+    hide_code: true
+    hide_output: true
+---
+"""
+    )
+
+    assert metadata_from_frontmatter(frontmatter) == {
+        "eval": False,
+        "echo": True,
+        "output": False,
+        "warning": False,
+        "error": True,
+        "include": True,
+        "editor": False,
+        "hide_code": True,
+        "hide_output": True,
+    }
+
+
 def test_code_cell_from_node_reads_regular_code_fences() -> None:
     cell = code_cell_from_node(
         {
@@ -75,6 +106,17 @@ def test_parse_plain_fence_info_reads_attributes_after_language() -> None:
     }
 
 
+def test_parse_plain_fence_info_reads_braced_myst_forms() -> None:
+    assert parse_plain_fence_info('{python .marimo echo="true"}') == {
+        "language": "python",
+        "echo": True,
+    }
+    assert parse_plain_fence_info('{sql.marimo query="rows"}') == {
+        "language": "sql",
+        "query": "rows",
+    }
+
+
 def test_source_fences_recovers_plain_marimo_fences_by_line() -> None:
     [fence] = source_fences(
         '# Title\n\n```python {.marimo hide_code="true"}\nx = 1\n```\n'
@@ -84,6 +126,17 @@ def test_source_fences_recovers_plain_marimo_fences_by_line() -> None:
     assert fence.language == "python"
     assert fence.code == "x = 1"
     assert fence.options["hide_code"] is True
+
+
+def test_source_fences_recovers_indented_marimo_fences() -> None:
+    [fence] = source_fences(
+        '# Title\n\n  ```{sql.marimo query="rows"}\n  select 1\n  ```\n'
+    )
+
+    assert fence.start_line == 3
+    assert fence.language == "sql"
+    assert fence.code == "select 1"
+    assert fence.options["query"] == "rows"
 
 
 def test_source_page_reads_frontmatter_and_fences() -> None:

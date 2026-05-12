@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import hashlib
 import html
 import json
+import keyword
 import re
 import sys
+from contextlib import redirect_stdout
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from textwrap import dedent
@@ -21,7 +25,25 @@ from marimo._convert.common.format import markdown_to_marimo, sql_to_marimo
 from marimo._session.notebook import AppFileManager
 from marimo._session.notebook.storage import FilesystemStorage
 
+from .authoring import (
+    ExecutionOptions,
+    as_bool,
+    is_unparseable,
+    normalized_options,
+    resolved_execution_options,
+    should_display_code,
+    should_display_output,
+    should_execute,
+    should_include,
+    pyproject_to_script_metadata,
+)
+
 MIN_MARIMO_VERSION = "0.23.5"
+ERROR_MIMETYPES = {
+    "application/vnd.marimo+error",
+    "application/vnd.marimo+traceback",
+}
+DEFAULT_SQL_QUERY_TARGET = "_df"
 
 
 def version_tuple(version: str) -> tuple[int, int, int]:
@@ -67,18 +89,37 @@ class HeadAssetParser(HTMLParser):
             self.links.append(values)
 
 
-def as_bool(value: Any, default: bool = False) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.lower() == "true"
-    return bool(value)
+class AttributeParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attrs: dict[str, str] = {}
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self.attrs = {key: value or "" for key, value in attrs}
 
 
-def normalized_options(options: dict[str, Any]) -> dict[str, Any]:
-    return {key.replace("-", "_"): value for key, value in options.items()}
+def is_valid_python_identifier(name: str) -> bool:
+    return name.isidentifier() and not keyword.iskeyword(name)
+
+
+def sql_query_target(query: Any) -> str:
+    target = str(query or DEFAULT_SQL_QUERY_TARGET)
+    if is_valid_python_identifier(target):
+        return target
+    return DEFAULT_SQL_QUERY_TARGET
+
+
+def sql_code_to_python(
+    code: str,
+    query: Any,
+    hide_output: bool = False,
+    engine: str | None = None,
+) -> str:
+    return sql_to_marimo(code, sql_query_target(query), hide_output, engine)
 
 
 def source_for_cell(cell: dict[str, Any]) -> str:
@@ -87,9 +128,9 @@ def source_for_cell(cell: dict[str, Any]) -> str:
     language = str(options.get("language") or "python").lower()
 
     if language == "sql":
-        return sql_to_marimo(
+        return sql_code_to_python(
             code,
-            str(options.get("query") or "_df"),
+            options.get("query"),
             as_bool(options.get("hide_output")),
             options.get("engine"),
         )
@@ -133,6 +174,7 @@ def output_model(
     app_id: str = "",
     notebook_code: str = "",
     assets: dict[str, Any] | None = None,
+    suppress_mimetypes: set[str] | None = None,
 ) -> dict[str, Any]:
     model: dict[str, Any] = {"html": html}
     if app_id:
@@ -141,7 +183,119 @@ def output_model(
         model["notebookCode"] = notebook_code
     if assets:
         model["assets"] = assets
+    if suppress_mimetypes:
+        model["suppressMimetypes"] = sorted(suppress_mimetypes)
     return model
+
+
+@dataclass(frozen=True)
+class CellPlan:
+    index: int
+    start_line: int | None
+    config: ExecutionOptions
+    language: str
+    original_code: str
+    executable_source: str
+    include: bool
+    display_code: bool
+    display_output: bool
+    execute: bool
+    disabled: bool
+    unparseable: bool
+
+    @classmethod
+    def from_payload(
+        cls,
+        index: int,
+        cell: dict[str, Any],
+        document_options: dict[str, Any],
+    ) -> CellPlan:
+        options = normalized_options(cell.get("options") or {})
+        config = resolved_execution_options(document_options, options)
+        language = str(options.get("language") or "python").lower()
+        start_line = cell.get("startLine")
+        return cls(
+            index=index,
+            start_line=start_line if isinstance(start_line, int) else None,
+            config=config,
+            language=language,
+            original_code=str(cell.get("code") or ""),
+            executable_source=source_for_cell(cell),
+            include=should_include(config),
+            display_code=should_display_code(config),
+            display_output=should_display_output(config),
+            execute=should_execute(config),
+            disabled=as_bool(config.get("disabled")),
+            unparseable=is_unparseable(config),
+        )
+
+    @property
+    def skip_without_execution(self) -> bool:
+        return not self.include and not self.execute
+
+    def non_executed_output(self) -> dict[str, Any]:
+        message = None
+        if self.disabled:
+            message = "disabled"
+        elif self.unparseable:
+            message = "unparseable"
+        return output_model(
+            visible_code_html(self.original_code, self.language, message)
+            if self.display_code
+            else ""
+        )
+
+    def compile_error_output(self) -> dict[str, Any]:
+        return output_model(
+            visible_code_html(
+                self.original_code,
+                self.language,
+                "could not compile",
+            )
+        )
+
+
+@dataclass(frozen=True)
+class PendingCellOutput:
+    plan: CellPlan
+    stub: Any
+
+
+def normalized_mimetype(value: str) -> str:
+    return html.unescape(value).strip().strip("\"'")
+
+
+def renderer_mimetype(tag: str) -> str:
+    parser = AttributeParser()
+    parser.feed(tag)
+    return normalized_mimetype(parser.attrs.get("data-mime", ""))
+
+
+def suppress_mime_renderers(island: str, mimetypes: set[str]) -> str:
+    if not mimetypes:
+        return island
+
+    def keep_or_remove(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        return "" if renderer_mimetype(tag) in mimetypes else tag
+
+    return re.sub(
+        r"<marimo-mime-renderer\b[^>]*>.*?</marimo-mime-renderer>",
+        keep_or_remove,
+        island,
+        flags=re.DOTALL,
+    )
+
+
+def has_error_mimetype(island: str) -> bool:
+    return any(
+        renderer_mimetype(match.group(0)) in ERROR_MIMETYPES
+        for match in re.finditer(
+            r"<marimo-mime-renderer\b[^>]*>.*?</marimo-mime-renderer>",
+            island,
+            flags=re.DOTALL,
+        )
+    )
 
 
 def page_digest(filename: str) -> str:
@@ -150,20 +304,6 @@ def page_digest(filename: str) -> str:
 
 def page_cell_prefix(filename: str) -> str:
     return f"jb{page_digest(filename)}"
-
-
-def pyproject_to_script_metadata(pyproject: str) -> str:
-    body = dedent(pyproject).strip()
-    if not body:
-        return ""
-    if body.startswith("# /// script"):
-        return f"{body}\n"
-
-    commented_lines = ["# /// script"]
-    for line in body.splitlines():
-        commented_lines.append(f"# {line}" if line else "#")
-    commented_lines.append("# ///")
-    return "\n".join(commented_lines) + "\n"
 
 
 def build_export_notebook_code(
@@ -186,29 +326,62 @@ def build_export_notebook_code(
 
 def install_browser_cell_prefix(notebook_code: str, cell_prefix: str) -> str:
     """Make browser-generated cell IDs match the server export."""
-    import_line = "from marimo._ast.cell_manager import CellManager\n"
-    if import_line not in notebook_code:
-        notebook_code, import_count = re.subn(
-            r"^import marimo(?:\s+as\s+\w+)?\n",
-            lambda match: f"{match.group(0)}{import_line}",
-            notebook_code,
-            count=1,
-            flags=re.MULTILINE,
-        )
-        if import_count == 0:
-            raise ValueError("Could not find marimo import in marimo code")
-    updated, app_count = re.subn(
-        r"^app\s*=\s*marimo\.App\([^)\n]*\)\s*\n",
-        lambda match: (
-            f'{match.group(0)}app._cell_manager = CellManager(prefix="{cell_prefix}")\n'
-        ),
-        notebook_code,
-        count=1,
-        flags=re.MULTILINE,
-    )
-    if app_count == 0:
+    try:
+        tree = ast.parse(notebook_code)
+    except SyntaxError as exc:
+        raise ValueError("Could not parse marimo code") from exc
+
+    marimo_names = {
+        alias.asname or alias.name
+        for node in tree.body
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == "marimo"
+    }
+    if not marimo_names:
+        raise ValueError("Could not find marimo import in marimo code")
+
+    app_constructor_end: int | None = None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = node.value
+        if not (
+            isinstance(target, ast.Name)
+            and target.id == "app"
+            and isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Attribute)
+            and value.func.attr == "App"
+            and isinstance(value.func.value, ast.Name)
+            and value.func.value.id in marimo_names
+        ):
+            continue
+        app_constructor_end = node.end_lineno
+        break
+    if app_constructor_end is None:
         raise ValueError("Could not install browser cell prefix in marimo code")
-    return updated
+
+    import_line = "from marimo._ast.cell_manager import CellManager\n"
+    prefix_line = f"app._cell_manager = CellManager(prefix={json.dumps(cell_prefix)})\n"
+    if prefix_line in notebook_code:
+        return notebook_code
+
+    lines = notebook_code.splitlines(keepends=True)
+    insertions: list[tuple[int, str]] = [(app_constructor_end, prefix_line)]
+    if import_line not in notebook_code:
+        import_line_index = max(
+            node.end_lineno or node.lineno
+            for node in tree.body
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if alias.name == "marimo"
+        )
+        insertions.append((import_line_index, import_line))
+
+    for index, text in sorted(insertions, reverse=True):
+        lines.insert(index, text)
+    return "".join(lines)
 
 
 def render_assets(generator: MarimoIslandGenerator) -> dict[str, Any]:
@@ -220,7 +393,7 @@ def render_assets(generator: MarimoIslandGenerator) -> dict[str, Any]:
     }
 
 
-async def build_generator(generator: MarimoIslandGenerator, filename: str) -> None:
+async def build_generator(generator: MarimoIslandGenerator, filename: str) -> bool:
     from marimo._server.export import run_app_until_completion
 
     if generator.has_run:
@@ -230,7 +403,7 @@ async def build_generator(generator: MarimoIslandGenerator, filename: str) -> No
     file_manager.storage = ReadOnlyFilesystemStorage()
     file_manager.filename = filename
     file_manager.app._app._filename = filename
-    session, _did_error = await run_app_until_completion(
+    session, did_error = await run_app_until_completion(
         file_manager=file_manager,
         cli_args={},
         argv=None,
@@ -241,114 +414,105 @@ async def build_generator(generator: MarimoIslandGenerator, filename: str) -> No
     for stub in generator._stubs:
         stub._internal_app = generator._app
         stub._session_view = session
+    return did_error
 
 
 async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     metadata = payload.get("metadata") or {}
     cells = payload.get("cells") or []
     filename = str(payload.get("file") or "")
-    eval_enabled = metadata.get("eval") is not False
-    app_id = "jb-" + page_digest(filename)
+    identity = str(payload.get("identity") or filename)
+    document_options = metadata if isinstance(metadata, dict) else {}
+    app_id = "jb-" + page_digest(identity)
     generator = MarimoIslandGenerator(app_id=app_id)
-    generator._app._app._cell_manager = CellManager(prefix=page_cell_prefix(filename))
-    outputs: list[dict[str, Any]] = []
-    executable_indexes: list[int] = []
+    generator._app._app._cell_manager = CellManager(prefix=page_cell_prefix(identity))
+    outputs: list[dict[str, Any] | None] = []
+    pending_outputs: list[PendingCellOutput] = []
 
     for index, cell in enumerate(cells):
-        options = normalized_options(cell.get("options") or {})
-        language = str(options.get("language") or "python").lower()
-        original_code = str(cell.get("code") or "")
-        code = source_for_cell(cell)
-        display_code = (
-            as_bool(options.get("echo")) or as_bool(options.get("editor"))
-        ) and not as_bool(options.get("hide_code"))
-        display_output = as_bool(options.get("output"), True) and not as_bool(
-            options.get("hide_output")
-        )
-        include = as_bool(options.get("include"), True)
-        disabled = as_bool(options.get("disabled"))
-        unparseable = as_bool(options.get("unparseable")) or as_bool(
-            options.get("unparsable")
-        )
-
-        if not include:
+        plan = CellPlan.from_payload(index, cell, document_options)
+        if plan.skip_without_execution:
             outputs.append(output_model(""))
             continue
-
-        if not eval_enabled or disabled or unparseable:
-            message = None
-            if disabled:
-                message = "disabled"
-            elif unparseable:
-                message = "unparseable"
-            outputs.append(
-                output_model(
-                    visible_code_html(original_code, language, message)
-                    if display_code
-                    else ""
-                )
-            )
+        if not plan.execute:
+            outputs.append(plan.non_executed_output())
             continue
 
         try:
             stub = generator.add_code(
-                code,
-                display_code=display_code,
-                display_output=display_output,
+                plan.executable_source,
+                display_code=plan.display_code,
+                display_output=plan.display_output,
                 is_reactive=True,
                 is_raw=True,
             )
         except Exception:
-            if not display_code:
+            if not plan.display_code:
                 raise
-            outputs.append(
-                output_model(
-                    visible_code_html(
-                        original_code,
-                        language,
-                        "could not compile",
-                    )
-                )
-            )
+            outputs.append(plan.compile_error_output())
             continue
 
-        executable_indexes.append(index)
-        outputs.append({"html": "", "_stub": stub})
+        outputs.append(None)
+        pending_outputs.append(PendingCellOutput(plan, stub))
 
-    if executable_indexes:
-        await build_generator(generator, filename)
+    if pending_outputs:
+        did_error = await build_generator(generator, filename)
         notebook_code = build_export_notebook_code(
             generator,
             str(metadata.get("pyproject") or ""),
-            cell_prefix=page_cell_prefix(filename),
+            cell_prefix=page_cell_prefix(identity),
             header=str(metadata.get("header") or ""),
         )
         assets = render_assets(generator)
     else:
+        did_error = False
         notebook_code = ""
         assets = {}
 
-    for cell_index, index in enumerate(executable_indexes):
-        stub = outputs[index].pop("_stub")
-        outputs[index] = output_model(
-            use_browser_cell_index(stub.render(), cell_index),
+    runtime_payload_index = next(
+        (pending.plan.index for pending in pending_outputs if pending.plan.include),
+        None,
+    )
+    for cell_index, pending in enumerate(pending_outputs):
+        plan = pending.plan
+        html_output = use_browser_cell_index(pending.stub.render(), cell_index)
+        if not as_bool(plan.config.get("error"), True):
+            if did_error and has_error_mimetype(html_output):
+                location = (
+                    f"{filename}:{plan.start_line}" if plan.start_line else filename
+                )
+                raise RuntimeError(f"marimo execution failed in {location}")
+            html_output = suppress_mime_renderers(html_output, ERROR_MIMETYPES)
+        if not plan.include:
+            outputs[plan.index] = output_model("")
+            continue
+        has_runtime_payload = plan.index == runtime_payload_index
+        outputs[plan.index] = output_model(
+            html_output,
             app_id=app_id,
-            notebook_code=notebook_code,
-            assets=assets,
+            notebook_code=notebook_code if has_runtime_payload else "",
+            assets=assets if has_runtime_payload else None,
         )
+
+    final_outputs: list[dict[str, Any]] = []
+    for output in outputs:
+        if output is None:
+            raise RuntimeError("internal error: marimo output was not rendered")
+        final_outputs.append(output)
 
     return {
         "cells": [
             {"startLine": cell.get("startLine"), "options": cell.get("options") or {}}
             for cell in cells
         ],
-        "outputs": outputs,
+        "outputs": final_outputs,
     }
 
 
 def main() -> None:
     payload = json.loads(sys.stdin.read())
-    result = asyncio.run(extract(payload))
+    with redirect_stdout(sys.stderr):
+        result = asyncio.run(extract(payload))
     sys.stdout.write(json.dumps(result))
 
 

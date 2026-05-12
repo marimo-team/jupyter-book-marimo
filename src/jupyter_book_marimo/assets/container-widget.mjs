@@ -2,7 +2,7 @@
  * anywidget container for exported marimo islands.
  *
  * MyST renders anywidgets inside a shadow root. marimo islands expect normal
- * light DOM, a hidden notebook source node, and same-origin runtime assets.
+ * light DOM, a hidden notebook source node, and a same-origin bridge asset.
  * This adapter keeps that boundary explicit.
  *
  * The Python plugin copies this file into the generated .jupyter-book-marimo/
@@ -12,69 +12,102 @@
 
 const outputClass = "marimo-jupyter-book-output";
 const loadingClass = "marimo-jupyter-book-loading";
+const pendingClass = "marimo-jupyter-book-pending";
+const previewClass = "marimo-jupyter-book-preview";
+const runtimeElementSelector =
+  "marimo-anywidget, marimo-ui-element, marimo-mime-renderer, " +
+  "marimo-json-output, marimo-table";
+const nestedRuntimeContainerSelector =
+  "marimo-accordion, marimo-tabs, marimo-carousel";
 const themeStyleId = "marimo-jupyter-book-theme";
 const shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
+const customStyleAttribute = "data-jupyter-book-marimo-custom-style";
 
 const loadedModules = new Map();
 const notebookCodeNodes = new Map();
 const appRecords = new Map();
-const observedShadowRoots = new WeakSet();
+const observedShadowRoots = new WeakMap();
+const observedShadowRootStyles = new WeakMap();
+const shadowRootsByMount = new Map();
+const themedRoots = new Map();
 
 let themeObserverStarted = false;
 let documentNavigationStarted = false;
 
+/*
+ * Styling contract:
+ * - the bridge owns structure: mounting, pending previews, skeletons, and
+ *   shadow-root style transport;
+ * - book themes own color: they can set --jbm-* variables with normal CSS;
+ * - custom stylesheets are the escape hatch for widget-specific shadow DOM.
+ */
 const globalThemeCss = `
-:root {
-  --jbm-code-bg: #f6f8fa;
-  --jbm-code-fg: #24292f;
-  --jbm-code-border: #d8dee4;
+.${outputClass} {
+  color: inherit;
+  color-scheme: inherit;
+  --jbm-background: var(--myst-color-background, var(--pst-color-background, Canvas));
+  --jbm-foreground: var(--myst-color-text, var(--pst-color-text-base, CanvasText));
+  --jbm-surface: var(--myst-color-surface, var(--pst-color-surface, Field));
+  --jbm-muted-surface: color-mix(in srgb, var(--jbm-foreground) 6%, var(--jbm-background));
+  --jbm-raised-surface: color-mix(in srgb, var(--jbm-foreground) 3%, var(--jbm-background));
+  --jbm-border: var(--myst-color-border, var(--pst-color-border, color-mix(in srgb, var(--jbm-foreground) 24%, transparent)));
+  --jbm-muted-foreground: var(--myst-color-text-muted, var(--pst-color-text-muted, color-mix(in srgb, var(--jbm-foreground) 68%, transparent)));
+  --jbm-link: var(--myst-color-link, var(--pst-color-link, LinkText));
+  --jbm-accent: var(--myst-color-primary, var(--pst-color-primary, Highlight));
+  --jbm-accent-foreground: var(--myst-color-on-primary, HighlightText);
+  --jbm-focus-ring: var(--myst-color-primary, var(--pst-color-primary, Highlight));
+  --jbm-code-bg: var(--myst-color-code-background, var(--pst-color-on-background, var(--jbm-muted-surface)));
+  --jbm-code-fg: var(--jbm-foreground);
+  --jbm-code-border: var(--jbm-border);
+  --jbm-inline-code-bg: color-mix(in srgb, var(--jbm-accent) 10%, transparent);
+  --jbm-inline-code-fg: var(--jbm-foreground);
+  --jbm-pending-bg: color-mix(in srgb, var(--jbm-surface) 78%, transparent);
+  --jbm-pending-border: var(--jbm-border);
+  --jbm-skeleton-bg: color-mix(in srgb, var(--jbm-surface) 86%, transparent);
+  --jbm-skeleton-line: color-mix(in srgb, var(--jbm-foreground) 14%, transparent);
+  --jbm-skeleton-line-strong: color-mix(in srgb, var(--jbm-foreground) 24%, transparent);
+  --jbm-hover-bg: color-mix(in srgb, var(--jbm-foreground) 8%, transparent);
+  --jbm-selection-bg: color-mix(in srgb, var(--jbm-accent) 28%, transparent);
 }
 
-html.dark {
-  --jbm-code-bg: #10151f;
-  --jbm-code-fg: #e6edf3;
-  --jbm-code-border: #303846;
+.${outputClass}[data-jb-theme="dark"] {
+  color-scheme: dark;
 }
 
-pre,
-pre code {
+.${outputClass}[data-jb-theme="light"] {
+  color-scheme: light;
+}
+
+.${outputClass} :where(pre) {
   background: var(--jbm-code-bg) !important;
   color: var(--jbm-code-fg) !important;
-}
-
-pre {
   border: 0 !important;
   box-shadow: none !important;
 }
 
-.myst-code {
+.${outputClass} :where(.myst-code) {
   background: var(--jbm-code-bg) !important;
   border: 1px solid var(--jbm-code-border);
   box-shadow: none !important;
 }
 
-.myst-code:hover {
+.${outputClass} :where(.myst-code:hover) {
   box-shadow: none !important;
 }
 
-.myst-code-body,
-.myst-code .myst-code-body,
-.myst-code .myst-code-body.hljs,
-.myst-code pre,
-.myst-code .hljs {
+.${outputClass} :where(
+  .myst-code-body,
+  .myst-code .myst-code-body,
+  .myst-code .myst-code-body.hljs,
+  .myst-code pre,
+  .myst-code .hljs
+) {
   background: transparent !important;
   background-color: transparent !important;
 }
 
-.highlight,
-.cell,
-.code-cell {
+.${outputClass} :where(.highlight, .cell, .code-cell) {
   box-shadow: none !important;
-}
-
-html.dark code:not(pre code) {
-  background: rgba(148, 163, 184, 0.16);
-  color: #f0abfc;
 }
 
 .${outputClass} pre {
@@ -84,53 +117,95 @@ html.dark code:not(pre code) {
   box-shadow: none !important;
 }
 
-html.dark .${outputClass} :where(marimo-island, marimo-island *) {
-  color: inherit !important;
+.${pendingClass} {
+  position: relative;
+  max-width: 100%;
 }
 
-html.dark .${outputClass} :where(a) {
-  color: #93c5fd !important;
+.${pendingClass}[data-has-preview="true"] {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.5rem;
+  border: 1px dashed var(--jbm-pending-border);
+  border-radius: 0.5rem;
+  background: var(--jbm-pending-bg);
 }
 
-html.dark .${outputClass} :where(code:not(pre code)) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f9a8d4 !important;
+.${pendingClass}[data-has-preview="true"] > .${previewClass} {
+  opacity: 0.58;
+  filter: grayscale(0.32) saturate(0.82);
+  pointer-events: none;
+  user-select: none;
 }
 
-html.dark .${outputClass} :where(hr) {
-  border-color: rgba(214, 211, 209, 0.24);
+.${pendingClass}:not([data-has-preview="true"]) > .${previewClass},
+.${pendingClass}[data-has-preview="true"] > .${loadingClass} {
+  display: none;
+}
+
+.${loadingClass} {
+  display: grid;
+  gap: 0.625rem;
+  width: min(100%, 34rem);
+  min-height: 5.25rem;
+  padding: 0.875rem;
+  border: 1px solid var(--jbm-pending-border);
+  border-radius: 0.5rem;
+  background: var(--jbm-skeleton-bg);
+}
+
+.${loadingClass} > span {
+  display: block;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--jbm-skeleton-line);
+}
+
+.${loadingClass} > span:first-child {
+  width: 62%;
+  background: var(--jbm-skeleton-line-strong);
+}
+
+.${loadingClass} > span:nth-child(2) {
+  width: 92%;
+}
+
+.${loadingClass} > span:last-child {
+  width: 44%;
 }
 `;
 
 const shadowThemeCss = `
-:host([data-jb-theme="dark"]) :where(
-  .marimo,
-  .marimo *,
-  .markdown,
-  .markdown *,
-  .text-muted-foreground,
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6,
-  p,
-  li,
-  summary,
-  button,
-  label
-) {
-  color: rgb(214, 211, 209) !important;
+:host {
+  color-scheme: inherit;
+  --background: var(--jbm-background, Canvas);
+  --foreground: var(--jbm-foreground, CanvasText);
+  --card: var(--jbm-surface, Field);
+  --card-foreground: var(--jbm-foreground, FieldText);
+  --popover: var(--jbm-surface, Field);
+  --popover-foreground: var(--jbm-foreground, FieldText);
+  --primary: var(--jbm-accent, Highlight);
+  --primary-foreground: var(--jbm-accent-foreground, HighlightText);
+  --secondary: var(--jbm-muted-surface, ButtonFace);
+  --secondary-foreground: var(--jbm-foreground, ButtonText);
+  --muted: var(--jbm-muted-surface, ButtonFace);
+  --muted-foreground: var(--jbm-muted-foreground, GrayText);
+  --accent: var(--jbm-accent, Highlight);
+  --accent-foreground: var(--jbm-accent-foreground, HighlightText);
+  --border: var(--jbm-border, ButtonBorder);
+  --input: var(--jbm-border, ButtonBorder);
+  --ring: var(--jbm-focus-ring, Highlight);
+  --cm-background: var(--jbm-code-bg, var(--background));
+  --cm-foreground: var(--jbm-code-fg, var(--foreground));
+  --cm-comment: var(--jbm-muted-foreground, GrayText);
 }
 
-:host([data-jb-theme="dark"]) :where(a) {
-  color: #93c5fd !important;
+:host([data-jb-theme="dark"]) {
+  color-scheme: dark;
 }
 
-:host([data-jb-theme="dark"]) :where(code:not(pre code)) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f9a8d4 !important;
+:host([data-jb-theme="light"]) {
+  color-scheme: light;
 }
 `;
 
@@ -146,6 +221,28 @@ function getModelValue(model, key, fallback = "") {
 function getModelString(model, key) {
   const value = getModelValue(model, key);
   return typeof value === "string" ? value : "";
+}
+
+function getModelStringList(model, key) {
+  const value = getModelValue(model, key, []);
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string");
+  }
+  return typeof value === "string" ? [value] : [];
+}
+
+function getModelStyleBlocks(model) {
+  const value = getModelValue(model, "customStyleBlocks", []);
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        typeof item.id === "string" &&
+        typeof item.css === "string",
+    )
+    .map((item) => ({ id: item.id, css: item.css }));
 }
 
 function parseHtml(html) {
@@ -275,47 +372,77 @@ function ensureLinks(links) {
   }
 }
 
+function normalizedStylesheetHrefs(stylesheets) {
+  return Array.from(
+    new Set(
+      stylesheets
+        .filter((stylesheet) => typeof stylesheet === "string")
+        .map((stylesheet) => stylesheet.trim())
+        .filter(Boolean)
+        .map((stylesheet) => new URL(stylesheet, document.baseURI).href),
+    ),
+  );
+}
+
+function hasCustomStylesheet(parent, href) {
+  return Array.from(parent.querySelectorAll(`link[${customStyleAttribute}]`))
+    .some(
+      (link) =>
+        link instanceof HTMLLinkElement &&
+        new URL(link.href, document.baseURI).href === href,
+    );
+}
+
+function ensureCustomStylesheets(root, stylesheets) {
+  const parent = root instanceof ShadowRoot ? root : document.head;
+  for (const href of normalizedStylesheetHrefs(stylesheets)) {
+    if (hasCustomStylesheet(parent, href)) continue;
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.setAttribute(customStyleAttribute, "true");
+    parent.appendChild(link);
+  }
+}
+
+function normalizedStyleBlocks(styleBlocks) {
+  const seen = new Set();
+  const normalized = [];
+  for (const block of styleBlocks) {
+    if (!block?.id || seen.has(block.id)) continue;
+    seen.add(block.id);
+    normalized.push(block);
+  }
+  return normalized;
+}
+
+function ensureCustomStyleBlocks(root, styleBlocks) {
+  const parent = root instanceof ShadowRoot ? root : document.head;
+  for (const block of normalizedStyleBlocks(styleBlocks)) {
+    const existing = Array.from(
+      parent.querySelectorAll(`style[${customStyleAttribute}]`),
+    ).find((node) => node.dataset.styleId === block.id);
+    if (existing) continue;
+
+    const style = document.createElement("style");
+    style.setAttribute(customStyleAttribute, "true");
+    style.dataset.styleId = block.id;
+    style.textContent = block.css;
+    parent.appendChild(style);
+  }
+}
+
 function ensureModule(src) {
   const href = new URL(src, document.baseURI).href;
   if (loadedModules.has(href)) return loadedModules.get(href);
 
-  const promise = new Promise((resolve, reject) => {
-    const existing = Array.from(
-      document.head.querySelectorAll('script[type="module"][src]'),
-    ).find(
-      (script) => script instanceof HTMLScriptElement && script.src === href,
-    );
-
-    if (
-      existing instanceof HTMLScriptElement &&
-      existing.dataset.loaded === "true"
-    ) {
-      resolve();
-      return;
-    }
-
-    const script = existing instanceof HTMLScriptElement
-      ? existing
-      : document.createElement("script");
-    script.type = "module";
-    script.src = href;
-    script.dataset.marimo = "true";
-    script.addEventListener(
-      "load",
-      () => {
-        script.dataset.loaded = "true";
-        resolve();
-      },
-      { once: true },
-    );
-    script.addEventListener(
-      "error",
-      () => reject(new Error(`Failed to load marimo runtime: ${href}`)),
-      { once: true },
-    );
-
-    if (!existing) document.head.appendChild(script);
-  });
+  const promise = import(href).then(
+    () => undefined,
+    () => {
+      throw new Error(`Failed to load marimo runtime: ${href}`);
+    },
+  );
 
   loadedModules.set(href, promise);
   return promise;
@@ -421,41 +548,179 @@ function ensureDocumentNavigation() {
   );
 }
 
-function syncHostTheme(host) {
-  host.dataset.jbTheme = document.documentElement.classList.contains("dark")
+function themeFromToken(value) {
+  if (typeof value !== "string") return "";
+  const normalized = value.toLowerCase();
+  for (const token of normalized.split(/[\s,]+/)) {
+    if (token === "light" || token === "dark") return token;
+  }
+  const hasDark = normalized.includes("dark");
+  const hasLight = normalized.includes("light");
+  if (hasDark && !hasLight) return "dark";
+  if (hasLight && !hasDark) return "light";
+  return "";
+}
+
+function explicitThemeFromElement(element) {
+  if (!(element instanceof HTMLElement)) return "";
+  const attributes = [
+    element.dataset.theme,
+    element.dataset.mode,
+    element.dataset.colorMode,
+    element.dataset.bsTheme,
+    element.getAttribute("theme"),
+  ];
+  for (const value of attributes) {
+    const theme = themeFromToken(value);
+    if (theme) return theme;
+  }
+  if (element.classList.contains("dark")) return "dark";
+  if (element.classList.contains("light")) return "light";
+  return "";
+}
+
+function luminanceFromColor(value) {
+  const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!match) return null;
+  const [, red, green, blue] = match.map(Number);
+  return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+}
+
+function colorSchemeFromDocument() {
+  for (const element of [document.documentElement, document.body]) {
+    const explicit = explicitThemeFromElement(element);
+    if (explicit) return explicit;
+  }
+
+  const colorScheme = getComputedStyle(document.documentElement).colorScheme;
+  const explicitScheme = themeFromToken(colorScheme);
+  if (explicitScheme) return explicitScheme;
+
+  const background = getComputedStyle(document.body).backgroundColor ||
+    getComputedStyle(document.documentElement).backgroundColor;
+  const luminance = luminanceFromColor(background);
+  if (luminance != null) return luminance < 0.5 ? "dark" : "light";
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches
     ? "dark"
     : "light";
+}
+
+function syncHostTheme(host) {
+  const theme = colorSchemeFromDocument();
+  host.dataset.jbTheme = theme;
+  host.dataset.jbColorScheme = theme;
 }
 
 function ensureThemeObserver() {
   if (themeObserverStarted) return;
   themeObserverStarted = true;
-  new MutationObserver(() => installShadowTheme(document)).observe(
-    document.documentElement,
+  const observer = new MutationObserver(() => refreshThemedRoots());
+  const options = {
+    attributes: true,
+    attributeFilter: [
+      "class",
+      "data-theme",
+      "data-mode",
+      "data-color-mode",
+      "data-bs-theme",
+      "style",
+      "theme",
+    ],
+  };
+  observer.observe(document.documentElement, options);
+  if (document.body) observer.observe(document.body, options);
+}
+
+function refreshThemedRoots() {
+  for (const [root, customStyles] of Array.from(themedRoots.entries())) {
+    if (!root.isConnected) {
+      themedRoots.delete(root);
+      continue;
+    }
+    installShadowTheme(
+      root,
+      customStyles.stylesheets,
+      customStyles.styleBlocks,
+      root,
+    );
+  }
+}
+
+function rememberShadowStyles(shadow, stylesheets, styleBlocks) {
+  const existing = observedShadowRootStyles.get(shadow) ?? {
+    stylesheets: [],
+    styleBlocks: [],
+  };
+  observedShadowRootStyles.set(
+    shadow,
     {
-      attributes: true,
-      attributeFilter: ["class"],
+      stylesheets: normalizedStylesheetHrefs([
+        ...existing.stylesheets,
+        ...stylesheets,
+      ]),
+      styleBlocks: normalizedStyleBlocks([
+        ...existing.styleBlocks,
+        ...styleBlocks,
+      ]),
     },
   );
 }
 
-function observeShadowRoot(shadow) {
-  if (observedShadowRoots.has(shadow)) return;
-  observedShadowRoots.add(shadow);
-  new MutationObserver(() => installShadowTheme(shadow)).observe(shadow, {
-    childList: true,
-    subtree: true,
-  });
+function observeShadowRoot(shadow, stylesheets, styleBlocks, owner) {
+  rememberShadowStyles(shadow, stylesheets, styleBlocks);
+  let record = observedShadowRoots.get(shadow);
+  if (!record) {
+    const observer = new MutationObserver(() => {
+      const customStyles = observedShadowRootStyles.get(shadow) ?? {
+        stylesheets: [],
+        styleBlocks: [],
+      };
+      installShadowTheme(
+        shadow,
+        customStyles.stylesheets,
+        customStyles.styleBlocks,
+        owner,
+      );
+    });
+    observer.observe(shadow, { childList: true, subtree: true });
+    record = { observer, owners: new Set() };
+    observedShadowRoots.set(shadow, record);
+  }
+  if (owner) {
+    record.owners.add(owner);
+    const shadows = shadowRootsByMount.get(owner) ?? new Set();
+    shadows.add(shadow);
+    shadowRootsByMount.set(owner, shadows);
+  }
 }
 
-function installShadowTheme(root) {
+function releaseShadowObservers(owner) {
+  const shadows = shadowRootsByMount.get(owner);
+  if (!shadows) return;
+
+  for (const shadow of shadows) {
+    const record = observedShadowRoots.get(shadow);
+    if (!record) continue;
+    record.owners.delete(owner);
+    if (record.owners.size === 0) {
+      record.observer.disconnect();
+      observedShadowRoots.delete(shadow);
+      observedShadowRootStyles.delete(shadow);
+    }
+  }
+  shadowRootsByMount.delete(owner);
+}
+
+function installShadowTheme(root, stylesheets = [], styleBlocks = [], owner = null) {
   ensureThemeObserver();
+  if (root instanceof HTMLElement) syncHostTheme(root);
   for (const node of root.querySelectorAll("*")) {
     const shadow = node.shadowRoot;
     if (!shadow) continue;
 
     syncHostTheme(node);
-    observeShadowRoot(shadow);
+    observeShadowRoot(shadow, stylesheets, styleBlocks, owner);
 
     if (!shadow.getElementById(shadowThemeStyleId)) {
       const style = document.createElement("style");
@@ -463,17 +728,32 @@ function installShadowTheme(root) {
       style.textContent = shadowThemeCss;
       shadow.appendChild(style);
     }
+    ensureCustomStyleBlocks(shadow, styleBlocks);
+    ensureCustomStylesheets(shadow, stylesheets);
 
-    installShadowTheme(shadow);
+    installShadowTheme(shadow, stylesheets, styleBlocks, owner);
   }
 }
 
-function scheduleShadowTheme(mount) {
-  installShadowTheme(mount);
-  requestAnimationFrame(() => installShadowTheme(mount));
+function scheduleShadowTheme(mount, stylesheets = [], styleBlocks = []) {
+  ensureThemeObserver();
+  const normalized = normalizedStylesheetHrefs(stylesheets);
+  const blocks = normalizedStyleBlocks(styleBlocks);
+  themedRoots.set(mount, { stylesheets: normalized, styleBlocks: blocks });
+  installShadowTheme(mount, normalized, blocks, mount);
+  requestAnimationFrame(() => installShadowTheme(mount, normalized, blocks, mount));
   for (const delay of [100, 500, 2000, 5000]) {
-    setTimeout(() => installShadowTheme(mount), delay);
+    setTimeout(() => installShadowTheme(mount, normalized, blocks, mount), delay);
   }
+  const observer = new MutationObserver(() =>
+    installShadowTheme(mount, normalized, blocks, mount),
+  );
+  observer.observe(mount, { childList: true, subtree: true });
+  return () => {
+    observer.disconnect();
+    releaseShadowObservers(mount);
+    themedRoots.delete(mount);
+  };
 }
 
 function stripHeadOnlyNodes(fragment) {
@@ -482,13 +762,182 @@ function stripHeadOnlyNodes(fragment) {
     .forEach((node) => node.remove());
 }
 
+function suppressMimeRenderers(root, mimetypes) {
+  if (mimetypes.length === 0) return;
+
+  root.querySelectorAll("marimo-mime-renderer").forEach((node) => {
+    const mime = (node.getAttribute("data-mime") ?? "").trim().replace(/^["']|["']$/g, "");
+    if (mimetypes.includes(mime)) {
+      node.remove();
+    }
+  });
+}
+
+function observeSuppressedMimeRenderers(root, mimetypes) {
+  suppressMimeRenderers(root, mimetypes);
+  if (mimetypes.length === 0) return () => {};
+
+  const observer = new MutationObserver(() => {
+    suppressMimeRenderers(root, mimetypes);
+  });
+  observer.observe(root, { childList: true, subtree: true });
+  return () => observer.disconnect();
+}
+
+function containsMarimoUiElement(node) {
+  return ["data-data", "data-json-data"]
+    .map((name) => node.getAttribute(name) ?? "")
+    .some((value) => value.includes("marimo-ui-element"));
+}
+
+function isDisplayCodeEditor(node) {
+  return node.matches("marimo-ui-element") &&
+    node.querySelector("marimo-code-editor");
+}
+
+function shouldDeferServerRuntimeElement(node) {
+  if (isDisplayCodeEditor(node)) {
+    return false;
+  }
+  if (node.matches("marimo-anywidget, marimo-ui-element, marimo-table")) {
+    return true;
+  }
+  if (node.matches("marimo-mime-renderer, marimo-json-output")) {
+    return containsMarimoUiElement(node);
+  }
+  return false;
+}
+
+function hasDeferredRuntimeAncestor(node) {
+  return Boolean(
+    node.parentElement?.closest(
+      `${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`,
+    ),
+  );
+}
+
+function canUsePendingPreview(node) {
+  if (node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
+    return false;
+  }
+  return !node.querySelector(runtimeElementSelector);
+}
+
+function replaceWithPendingPreview(node) {
+  const wrapper = document.createElement("div");
+  wrapper.className = pendingClass;
+  wrapper.setAttribute("aria-busy", "true");
+  wrapper.setAttribute("aria-disabled", "true");
+  wrapper.inert = true;
+
+  if (canUsePendingPreview(node)) {
+    const preview = document.createElement("div");
+    preview.className = previewClass;
+
+    wrapper.append(preview, loadingNode());
+    node.replaceWith(wrapper);
+    preview.append(node);
+  } else {
+    wrapper.append(loadingNode());
+    node.replaceWith(wrapper);
+  }
+  return wrapper;
+}
+
 function deferServerRuntimeElements(fragment) {
   fragment
-    .querySelectorAll("marimo-anywidget, marimo-mime-renderer, marimo-table")
+    .querySelectorAll(runtimeElementSelector)
     .forEach((node) => {
-      const placeholder = loadingNode();
-      node.replaceWith(placeholder);
+      if (hasDeferredRuntimeAncestor(node)) return;
+      if (!shouldDeferServerRuntimeElement(node)) return;
+      replaceWithPendingPreview(node);
     });
+}
+
+function deferNestedServerRuntimeElements(fragment) {
+  fragment
+    .querySelectorAll(nestedRuntimeContainerSelector)
+    .forEach((node) => {
+      if (hasDeferredRuntimeAncestor(node)) return;
+      if (!node.innerHTML.includes("marimo-ui-element")) return;
+      replaceWithPendingPreview(node);
+    });
+}
+
+function hasVisiblePreview(wrapper) {
+  const preview = wrapper.querySelector(`:scope > .${previewClass}`);
+  if (!(preview instanceof HTMLElement)) return false;
+  if (preview.textContent.trim()) return true;
+
+  const rect = preview.getBoundingClientRect();
+  return rect.width > 1 && rect.height > 1;
+}
+
+function refreshPendingPreviews(root) {
+  root.querySelectorAll(`.${pendingClass}`).forEach((wrapper) => {
+    if (!(wrapper instanceof HTMLElement)) return;
+    if (hasVisiblePreview(wrapper)) {
+      wrapper.dataset.hasPreview = "true";
+    } else {
+      delete wrapper.dataset.hasPreview;
+    }
+  });
+}
+
+function schedulePendingPreviews(root) {
+  refreshPendingPreviews(root);
+  requestAnimationFrame(() => refreshPendingPreviews(root));
+  for (const delay of [100, 500, 1500, 3000]) {
+    setTimeout(() => refreshPendingPreviews(root), delay);
+  }
+}
+
+function cellIdFromIsland(island) {
+  try {
+    return typeof island.cellId === "string" ? island.cellId : "";
+  } catch {
+    return island.getAttribute("data-cell-id") ?? "";
+  }
+}
+
+function firstElementChild(node) {
+  const child = node.firstElementChild;
+  return child instanceof HTMLElement ? child : null;
+}
+
+function syncIslandCellContainers(root) {
+  root.querySelectorAll("marimo-island").forEach((island) => {
+    const cellId = cellIdFromIsland(island);
+    const container = firstElementChild(island);
+    if (!cellId || !container) return;
+
+    /*
+     * marimo plugins locate their owning cell by walking to the nearest
+     * div#cell-*. Islands mount into a custom element, so expose the same
+     * runtime cell id on the React output wrapper once the browser runtime has
+     * resolved data-cell-idx to a concrete cell id.
+     */
+    if (container.tagName === "DIV") {
+      container.id = `cell-${cellId}`;
+    }
+  });
+}
+
+function scheduleIslandCellContainers(root) {
+  syncIslandCellContainers(root);
+
+  const frame = requestAnimationFrame(() => syncIslandCellContainers(root));
+  const timeouts = [100, 500, 1500, 3000, 5000].map((delay) =>
+    setTimeout(() => syncIslandCellContainers(root), delay),
+  );
+  const observer = new MutationObserver(() => syncIslandCellContainers(root));
+  observer.observe(root, { childList: true, subtree: true });
+
+  return () => {
+    cancelAnimationFrame(frame);
+    timeouts.forEach(clearTimeout);
+    observer.disconnect();
+  };
 }
 
 function clearHost(host) {
@@ -516,7 +965,11 @@ function createLightDomMount(el) {
 function loadingNode() {
   const node = document.createElement("div");
   node.className = loadingClass;
-  node.textContent = "Loading marimo output...";
+  node.setAttribute("role", "status");
+  node.setAttribute("aria-label", "Loading marimo output");
+  for (let index = 0; index < 3; index += 1) {
+    node.appendChild(document.createElement("span"));
+  }
   return node;
 }
 
@@ -547,7 +1000,22 @@ function readOutputModel(model) {
     notebookCode,
     appId: getModelString(model, "appId") || appIdFrom(body, notebookCode),
     assets: assetsFromModel(model, head),
+    customStylesheets: getModelStringList(model, "customStylesheets"),
+    customStyleBlocks: getModelStyleBlocks(model),
+    suppressMimetypes: getModelStringList(model, "suppressMimetypes"),
   };
+}
+
+function hasRuntimePayload(output) {
+  return Boolean(
+    output.notebookCode ||
+      output.assets.moduleScripts.length > 0 ||
+      output.assets.links.length > 0,
+  );
+}
+
+function isOutputBodyEmpty(output) {
+  return output.body.childNodes.length === 0;
 }
 
 function mountMarimo(model, el) {
@@ -557,43 +1025,69 @@ function mountMarimo(model, el) {
   let cancelled = false;
   let releaseCode = () => {};
   let releaseAppRecord = () => {};
+  let releaseMimeObserver = () => {};
+  let releaseTheme = () => {};
+  let releaseCellContainers = () => {};
 
   stripHeadOnlyNodes(output.body);
+  suppressMimeRenderers(output.body, output.suppressMimetypes);
+  deferNestedServerRuntimeElements(output.body);
   deferServerRuntimeElements(output.body);
   ensureThemeStyle();
+  ensureCustomStyleBlocks(document, output.customStyleBlocks);
+  ensureCustomStylesheets(document, output.customStylesheets);
   ensureDocumentNavigation();
-  mount.replaceChildren(loadingNode());
+
+  const hasRuntime = Boolean(output.appId) || hasRuntimePayload(output);
+  const hasPayload = hasRuntimePayload(output);
+  const bodyIsEmpty = isOutputBodyEmpty(output);
+
+  if (!bodyIsEmpty) {
+    mount.replaceChildren(output.body);
+    releaseMimeObserver = observeSuppressedMimeRenderers(
+      mount,
+      output.suppressMimetypes,
+    );
+    releaseTheme = scheduleShadowTheme(
+      mount,
+      output.customStylesheets,
+      output.customStyleBlocks,
+    );
+    releaseCellContainers = scheduleIslandCellContainers(mount);
+    schedulePendingPreviews(mount);
+  } else if (hasRuntime) {
+    mount.replaceChildren(loadingNode());
+  } else {
+    mount.replaceChildren();
+  }
 
   const hydrate = async () => {
     try {
-      if (
-        output.notebookCode ||
-        output.assets.moduleScripts.length > 0 ||
-        output.assets.links.length > 0
-      ) {
+      if (hasPayload) {
         releaseCode = retainNotebookCode(output.appId, output.notebookCode);
       }
 
-      if (!cancelled) {
-        mount.replaceChildren(output.body);
-        scheduleShadowTheme(mount);
-      }
-
-      if (
-        output.notebookCode ||
-        output.assets.moduleScripts.length > 0 ||
-        output.assets.links.length > 0
-      ) {
+      if (output.appId && hasPayload) {
         releaseAppRecord = retainApp(
           output.appId,
           output.notebookCode,
           output.assets,
         );
+      } else if (output.appId) {
+        appRecord(output.appId);
       }
 
       if (output.appId) {
         await appRecord(output.appId).promise;
-        if (!cancelled) scheduleShadowTheme(mount);
+        if (!cancelled) {
+          if (bodyIsEmpty) mount.replaceChildren();
+          releaseTheme();
+          releaseTheme = scheduleShadowTheme(
+            mount,
+            output.customStylesheets,
+            output.customStyleBlocks,
+          );
+        }
       }
     } catch (error) {
       if (!cancelled) mount.replaceChildren(runtimeError(error));
@@ -606,6 +1100,9 @@ function mountMarimo(model, el) {
     cancelled = true;
     releaseCode();
     releaseAppRecord();
+    releaseMimeObserver();
+    releaseTheme();
+    releaseCellContainers();
     mount.remove();
   };
 }

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+import shutil
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from jupyter_book_marimo.plugin import (
     CONTAINER_WIDGET,
-    parsed_source_pages,
-    run_transform,
-    source_fence_lookup,
+    STYLESHEETS_ENV,
+    SourceContext,
     source_page_context,
+    stylesheets_from_env,
+    transform_document,
     widget_esm,
 )
 
@@ -29,14 +34,15 @@ def test_transform_replaces_marked_cells_and_reads_frontmatter_metadata() -> Non
 
     with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
         with patch("jupyter_book_marimo.plugin.source_page_context") as context:
-            context.return_value = (
+            context.return_value = SourceContext(
                 {"header": "# Copyright 2026 Marimo. All rights reserved"},
                 {},
+                None,
             )
             run_extractor.return_value = {
                 "outputs": [{"html": "<marimo-island></marimo-island>"}]
             }
-            result = run_transform("marimo-code-fences", tree)
+            result = transform_document(tree)
 
     assert result["children"][0]["type"] == "anywidget"
     assert (
@@ -76,11 +82,11 @@ x = 1
     }
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
-    parsed_source_pages.cache_clear()
-    metadata, lookup = source_page_context(tree)
+    context = source_page_context(tree)
 
-    assert metadata == {"pyproject": 'dependencies = ["marimo>=0.23.5"]'}
-    assert lookup[(9, "python", "x = 1")] == {
+    assert context.metadata == {"pyproject": 'dependencies = ["marimo>=0.23.5"]'}
+    assert context.path == tmp_path / "page.md"
+    assert context.options_by_signature[(9, "python", "x = 1")] == {
         "language": "python",
         "hide_code": True,
     }
@@ -105,10 +111,89 @@ def test_transform_preserves_regular_comments() -> None:
         run_extractor.return_value = {
             "outputs": [{"html": "<marimo-island></marimo-island>"}]
         }
-        result = run_transform("marimo-code-fences", tree)
+        result = transform_document(tree)
 
     assert result["children"][0]["type"] == "comment"
     assert result["children"][1]["type"] == "anywidget"
+
+
+def test_transform_attaches_custom_stylesheet_assets(
+    tmp_path: Path, monkeypatch
+) -> None:
+    stylesheet = tmp_path / "styles" / "theme.css"
+    stylesheet.parent.mkdir()
+    stylesheet.write_text(".marimo-jupyter-book-output { --jbm-code-bg: white; }\n")
+    tree = {
+        "type": "root",
+        "children": [
+            {
+                "type": "code",
+                "lang": "python",
+                "meta": "{.marimo}",
+                "value": "x = 1",
+                "position": {"start": {"line": 8}},
+            },
+        ],
+    }
+
+    monkeypatch.chdir(tmp_path)
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.return_value = {
+            "outputs": [{"html": "<marimo-island></marimo-island>"}]
+        }
+        result = transform_document(
+            tree,
+            stylesheets=("styles/theme.css",),
+        )
+
+    content = stylesheet.read_text()
+    digest = hashlib.sha1(content.encode("utf-8")).hexdigest()[:12]
+    assert "customStylesheets" not in result["children"][0]["model"]
+    assert result["children"][0]["model"]["customStyleBlocks"] == [
+        {"id": f"theme-{digest}", "css": content}
+    ]
+
+
+def test_stylesheets_from_env_accepts_comma_separated_values(monkeypatch) -> None:
+    monkeypatch.setenv(
+        STYLESHEETS_ENV,
+        "styles/jupyter-book-marimo.css,https://example.com/marimo.css",
+    )
+
+    assert stylesheets_from_env() == (
+        "styles/jupyter-book-marimo.css",
+        "https://example.com/marimo.css",
+    )
+
+
+def test_stylesheets_from_env_accepts_json_list(monkeypatch) -> None:
+    monkeypatch.setenv(
+        STYLESHEETS_ENV,
+        '["styles/jupyter-book-marimo.css", "https://example.com/marimo.css"]',
+    )
+
+    assert stylesheets_from_env() == (
+        "styles/jupyter-book-marimo.css",
+        "https://example.com/marimo.css",
+    )
+
+
+def test_widget_esm_stays_source_relative_with_base_url(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("BASE_URL", "/book/")
+
+    assert widget_esm() == f"/.jupyter-book-marimo/{CONTAINER_WIDGET}"
+
+
+def test_widget_esm_stays_source_relative_with_bare_base_url(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("BASE_URL", "book")
+
+    assert widget_esm() == f"/.jupyter-book-marimo/{CONTAINER_WIDGET}"
 
 
 def test_transform_recovers_plain_fence_options_from_source_positions() -> None:
@@ -128,19 +213,20 @@ def test_transform_recovers_plain_fence_options_from_source_positions() -> None:
         patch("jupyter_book_marimo.plugin.source_page_context") as context,
         patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor,
     ):
-        context.return_value = (
+        context.return_value = SourceContext(
             {},
             {(3, "python", "x = 1"): {"language": "python", "hide_code": True}},
+            None,
         )
         run_extractor.return_value = {
             "outputs": [{"html": "<marimo-island></marimo-island>"}]
         }
-        run_transform("marimo-code-fences", tree)
+        transform_document(tree)
 
     assert run_extractor.call_args.args[0]["cells"][0]["options"]["hide_code"] is True
 
 
-def test_source_fence_lookup_scans_markdown_sources(
+def test_source_page_context_scans_markdown_sources(
     tmp_path: Path, monkeypatch
 ) -> None:
     (tmp_path / "page.md").write_text(
@@ -148,16 +234,15 @@ def test_source_fence_lookup_scans_markdown_sources(
     )
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
-    parsed_source_pages.cache_clear()
-    fixture = source_fence_lookup()
+    context = source_page_context()
 
-    assert fixture[(3, "python", "x = 1")] == {
+    assert context.options_by_signature[(3, "python", "x = 1")] == {
         "language": "python",
         "hide_code": True,
     }
 
 
-def test_source_fence_lookup_uses_current_tree_to_pick_page(
+def test_source_page_context_uses_current_tree_to_pick_page(
     tmp_path: Path, monkeypatch
 ) -> None:
     (tmp_path / "first.md").write_text(
@@ -179,15 +264,52 @@ def test_source_fence_lookup_uses_current_tree_to_pick_page(
     }
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
-    parsed_source_pages.cache_clear()
-    fixture = source_fence_lookup(tree)
+    context = source_page_context(tree)
 
-    assert fixture == {(3, "python", "y = 2"): {"language": "python", "editor": True}}
+    assert context.options_by_signature == {
+        (3, "python", "y = 2"): {"language": "python", "editor": True}
+    }
 
 
-def test_source_page_context_caches_source_parsing(tmp_path: Path, monkeypatch) -> None:
-    (tmp_path / "page.md").write_text(
-        '# Title\n\n```python {.marimo hide_code="true"}\nx = 1\n```\n'
+def test_source_page_context_rereads_source_pages(tmp_path: Path, monkeypatch) -> None:
+    page = tmp_path / "page.md"
+    page.write_text('# Title\n\n```python {.marimo hide_code="true"}\nx = 1\n```\n')
+    tree = {
+        "type": "root",
+        "children": [
+            {
+                "type": "code",
+                "lang": "python",
+                "value": "x = 1",
+                "position": {"start": {"line": 3}},
+            }
+        ],
+    }
+
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+
+    first_context = source_page_context(tree)
+    page.write_text('# Title\n\n```python {.marimo editor="true"}\nx = 1\n```\n')
+    second_context = source_page_context(tree)
+
+    assert first_context.options_by_signature[(3, "python", "x = 1")] == {
+        "language": "python",
+        "hide_code": True,
+    }
+    assert second_context.options_by_signature[(3, "python", "x = 1")] == {
+        "language": "python",
+        "editor": True,
+    }
+
+
+def test_source_page_context_reports_ambiguous_source_pages(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "first.md").write_text(
+        '# First\n\n```python {.marimo hide_code="true"}\nx = 1\n```\n'
+    )
+    (tmp_path / "second.md").write_text(
+        '# Second\n\n```python {.marimo editor="true"}\nx = 1\n```\n'
     )
     tree = {
         "type": "root",
@@ -200,57 +322,101 @@ def test_source_page_context_caches_source_parsing(tmp_path: Path, monkeypatch) 
             }
         ],
     }
-    calls = 0
-    original_source_files = __import__(
-        "jupyter_book_marimo.plugin", fromlist=["source_files"]
-    ).source_files
-
-    def counted_source_files(root: Path) -> list[Path]:
-        nonlocal calls
-        calls += 1
-        return original_source_files(root)
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
-    monkeypatch.setattr("jupyter_book_marimo.plugin.source_files", counted_source_files)
-    parsed_source_pages.cache_clear()
 
-    source_page_context(tree)
-    source_page_context(tree)
-
-    assert calls == 1
+    with pytest.raises(ValueError, match="Ambiguous marimo source page"):
+        source_page_context(tree)
 
 
-def test_public_docs_use_plain_language_fence_api() -> None:
-    root = Path.cwd()
-    public_markdown = [
-        root / "README.md",
-        root / "docs" / "index.md",
-        *sorted((root / "docs" / "tutorials").glob("*.md")),
-    ]
-    old_style: list[str] = []
-    for path in public_markdown:
-        for line_number, line in enumerate(path.read_text().splitlines(), start=1):
-            if line.startswith("```{") and ".marimo" in line:
-                old_style.append(f"{path.relative_to(root)}:{line_number}:{line}")
+def test_source_page_context_ignores_unrelated_invalid_frontmatter(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "page.md").write_text(
+        '# Page\n\n```python {.marimo echo="true"}\nx = 1\n```\n'
+    )
+    (tmp_path / "draft.md").write_text(
+        "---\noptions:\n  marimo: definitely-not-a-mapping\n---\n\n"
+        "```python {.marimo}\ny = 2\n```\n"
+    )
+    tree = {
+        "type": "root",
+        "children": [
+            {
+                "type": "code",
+                "lang": "python",
+                "value": "x = 1",
+                "position": {"start": {"line": 3}},
+            }
+        ],
+    }
 
-    assert old_style == []
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+
+    context = source_page_context(tree)
+
+    assert context.path == tmp_path / "page.md"
+    assert context.options_by_signature[(3, "python", "x = 1")] == {
+        "language": "python",
+        "echo": True,
+    }
 
 
-def test_public_docs_use_frontmatter_for_marimo_metadata() -> None:
-    root = Path.cwd()
-    public_markdown = [
-        root / "README.md",
-        root / "docs" / "index.md",
-        *sorted((root / "docs" / "tutorials").glob("*.md")),
-    ]
-    old_style: list[str] = []
-    legacy_tokens = ("marimo-" + "header", "marimo-" + "pyproject")
-    for path in public_markdown:
-        for line_number, line in enumerate(path.read_text().splitlines(), start=1):
-            if any(token in line for token in legacy_tokens):
-                old_style.append(f"{path.relative_to(root)}:{line_number}:{line}")
+def test_source_page_context_matches_indented_source_fence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "page.md").write_text(
+        '# Page\n\n  ```python {.marimo echo="true"}\n  x = 1\n  ```\n'
+    )
+    tree = {
+        "type": "root",
+        "children": [
+            {
+                "type": "code",
+                "lang": "python",
+                "value": "x = 1",
+                "position": {"start": {"line": 3}},
+            }
+        ],
+    }
 
-    assert old_style == []
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+
+    context = source_page_context(tree)
+
+    assert context.path == tmp_path / "page.md"
+    assert context.options_by_signature[(3, "python", "x = 1")] == {
+        "language": "python",
+        "echo": True,
+    }
+
+
+def test_transform_passes_matched_source_path_to_extractor(
+    tmp_path: Path, monkeypatch
+) -> None:
+    page = tmp_path / "page.md"
+    page.write_text("# Page\n\n```python {.marimo}\nx = 1\n```\n")
+    tree = {
+        "type": "root",
+        "children": [
+            {
+                "type": "code",
+                "lang": "python",
+                "value": "x = 1",
+                "position": {"start": {"line": 3}},
+            }
+        ],
+    }
+
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.return_value = {
+            "outputs": [{"html": "<marimo-island></marimo-island>"}]
+        }
+        transform_document(tree)
+
+    assert run_extractor.call_args.args[0]["file"] == str(page)
+    assert run_extractor.call_args.args[0]["identity"] == "page.md"
 
 
 def test_container_widget_asset_is_named_and_source_like(tmp_path: Path, monkeypatch):
@@ -262,7 +428,30 @@ def test_container_widget_asset_is_named_and_source_like(tmp_path: Path, monkeyp
 
     assert asset.exists()
     assert "const containerWidget" in source
+    assert "Styling contract" in source
     assert "const globalThemeCss" in source
-    assert ".myst-code" in source
-    assert ".${outputClass} pre" in source
+    assert ".${outputClass} :where(.myst-code)" in source
+    assert "marimo-jupyter-book-pending" in source
+    assert "marimo-table" in source
+    assert "marimo-code-editor" in source
+    assert "\npre,\npre code" not in source
+    assert "\n.myst-code {" not in source
+    assert "html.dark ." not in source
+    assert "html.dark code:not(pre code)" not in source
+    assert "Loading marimo output..." not in source
     assert "\nvar " not in source
+
+
+def test_container_widget_asset_is_valid_javascript() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+
+    result = subprocess.run(
+        [node, "--check", "src/jupyter_book_marimo/assets/container-widget.mjs"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

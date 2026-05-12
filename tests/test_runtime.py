@@ -70,3 +70,18 @@ def test_sandboxed_extractor_returns_json_payload(monkeypatch) -> None:
     assert runtime.run_extractor({"metadata": {"pyproject": "dependencies = []"}}) == {
         "outputs": []
     }
+
+
+def test_in_process_extractor_keeps_stdout_available_for_plugin_protocol(
+    monkeypatch, capsys
+) -> None:
+    async def fake_extract(_payload):
+        print("user stdout")
+        return {"outputs": []}
+
+    monkeypatch.setattr(runtime, "extract", fake_extract)
+
+    assert runtime.run_extractor({"metadata": {}}) == {"outputs": []}
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "user stdout" in captured.err
