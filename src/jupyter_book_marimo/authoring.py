@@ -1,4 +1,9 @@
-"""Parse marimo-flavoured MyST authoring into executable cells."""
+"""Parse marimo-flavoured MyST authoring into executable cell models.
+
+This module owns source syntax only: YAML frontmatter, fence attributes, and
+execution-option normalization. It deliberately does not execute code or mutate
+the MyST document tree.
+"""
 
 from __future__ import annotations
 
@@ -60,6 +65,7 @@ def as_bool(value: Any, default: bool = False) -> bool:
 
 
 def normalized_options(options: dict[str, Any]) -> ExecutionOptions:
+    """Use Python-friendly option keys even when authors write dash-case."""
     return {key.replace("-", "_"): value for key, value in options.items()}
 
 
@@ -76,6 +82,7 @@ def resolved_execution_options(
 
 
 def is_unparseable(config: ExecutionOptions) -> bool:
+    """Accept both spellings because authoring tools and examples vary."""
     return as_bool(config.get("unparseable")) or as_bool(config.get("unparsable"))
 
 
@@ -110,6 +117,8 @@ def should_display_output(config: ExecutionOptions) -> bool:
 
 @dataclass
 class Cell:
+    """One executable authoring unit plus the MyST position that produced it."""
+
     code: str
     options: CellOptions
     position: dict[str, Any] | None = None
@@ -129,6 +138,8 @@ class Cell:
 
 @dataclass
 class SourceFence:
+    """A raw Markdown fence kept so parser-lost attributes can be recovered."""
+
     start_line: int
     language: str
     code: str
@@ -149,6 +160,7 @@ FRONTMATTER_PATTERN = re.compile(
 
 
 def _unquote(value: str) -> str:
+    """Undo simple quoted MyST attribute values without a full shell parser."""
     if len(value) < 2:
         return value
     quote = value[0]
@@ -158,6 +170,7 @@ def _unquote(value: str) -> str:
 
 
 def parse_scalar(value: Any) -> str | int | float | bool | None:
+    """Coerce attribute/frontmatter scalars into the types execution expects."""
     if value is None:
         return ""
     if isinstance(value, bool | int | float):
@@ -178,6 +191,7 @@ def parse_scalar(value: Any) -> str | int | float | bool | None:
 
 
 def tokenize_info(value: str) -> list[str]:
+    """Split fence info text while preserving quoted attribute values."""
     return [
         match.group(0)
         for match in re.finditer(r'"([^"\\]|\\.)*"|\'([^\'\\]|\\.)*\'|\S+', value)
@@ -185,6 +199,7 @@ def tokenize_info(value: str) -> list[str]:
 
 
 def normalize_language(language: str) -> str:
+    """Collapse authoring aliases to the languages the extractor supports."""
     normalized = language.strip().lower()
     if normalized in {"py", "python3", "marimo"}:
         return "python"
@@ -213,6 +228,7 @@ def parse_attribute_tokens(tokens: list[str]) -> tuple[bool, CellOptions]:
 
 
 def parse_code_meta(language: str, meta: str | None) -> CellOptions | None:
+    """Parse MyST AST language/meta fields when attributes survived parsing."""
     language = normalize_language(language)
     if language not in {"python", "sql", "markdown"}:
         return None
@@ -256,6 +272,7 @@ def parse_plain_fence_info(info: str) -> CellOptions | None:
 
 
 def source_fences(source: str) -> list[SourceFence]:
+    """Scan raw Markdown so options lost by MyST parsing can be recovered."""
     fences: list[SourceFence] = []
     lines = source.splitlines()
     index = 0
@@ -290,6 +307,9 @@ def source_fences(source: str) -> list[SourceFence]:
             )
             fences.append(
                 SourceFence(
+                    # MyST code-node positions point at the opening fence line;
+                    # keep the same 1-based line so raw fences can be joined
+                    # back to parsed code nodes later.
                     start_line=index + 1,
                     language=str(options["language"]),
                     code="\n".join(body_lines),
@@ -324,6 +344,7 @@ def read_frontmatter(source: str) -> dict[str, Any]:
 
 
 def _frontmatter_string(value: Any, key: str) -> str | None:
+    """Normalize multiline marimo frontmatter strings without trailing noise."""
     if value is None:
         return None
     if not isinstance(value, str):
@@ -332,6 +353,7 @@ def _frontmatter_string(value: Any, key: str) -> str | None:
 
 
 def metadata_from_frontmatter(frontmatter: dict[str, Any]) -> dict[str, Any]:
+    """Extract only the `options.marimo` namespace owned by this plugin."""
     options = frontmatter.get("options")
     if options is None:
         return {}
@@ -366,6 +388,7 @@ def source_page(source: str, path: Path | None = None) -> SourcePage:
 def code_cell_from_node(
     node: dict[str, Any], source_options: CellOptions | None = None
 ) -> Cell | None:
+    """Turn a MyST code node into a cell, falling back to raw source options."""
     if node.get("type") != "code":
         return None
     options = parse_code_meta(str(node.get("lang") or ""), node.get("meta"))

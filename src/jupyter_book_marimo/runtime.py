@@ -1,4 +1,8 @@
-"""Run marimo extraction either in-process or in a page-local uv sandbox."""
+"""Choose where marimo extraction runs for a transformed page.
+
+Most pages run in-process; pages with ``options.marimo.pyproject`` run through
+``uv`` so their dependencies stay local to the page authoring contract.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ UV_RUN_TIMEOUT_SECONDS = 300
 
 
 async def extract(payload: dict[str, Any]) -> dict[str, Any]:
+    """Import lazily so plugin discovery does not load execution code."""
     from .extract import extract as real_extract
 
     return await real_extract(payload)
@@ -31,6 +36,7 @@ def source_root() -> Path:
 
 
 def sandbox_env() -> dict[str, str]:
+    """Prepend local src to PYTHONPATH so uv runs this checkout."""
     env = os.environ.copy()
     pythonpath = env.get("PYTHONPATH")
     paths = [str(source_root())]
@@ -42,7 +48,8 @@ def sandbox_env() -> dict[str, str]:
 
 @contextmanager
 def uv_run_args(pyproject: str) -> Generator[list[str], None, None]:
-    """Build the ``uv run`` argument list for one document."""
+    # marimo moved sandbox helpers across private modules; support both import
+    # paths so this plugin can share marimo's dependency parser across versions.
     try:
         sandbox_module = importlib.import_module("marimo._internal.sandbox")
     except ImportError:
@@ -57,6 +64,8 @@ def uv_run_args(pyproject: str) -> Generator[list[str], None, None]:
     script_metadata = pyproject_to_script_metadata(pyproject)
     pyproject_config = pyproject_reader.from_script(script_metadata)
     with tempfile.TemporaryDirectory(prefix="jupyter-book-marimo-") as temp_dir:
+        # construct_uv_flags writes requirements/constraints beside this file;
+        # keep that scratch state scoped to one page extraction.
         with tempfile.NamedTemporaryFile(
             mode="w", delete=False, dir=temp_dir, suffix=".txt"
         ) as temp_file:
@@ -68,6 +77,7 @@ def uv_run_args(pyproject: str) -> Generator[list[str], None, None]:
 
 
 def run_extractor(payload: dict[str, Any]) -> dict[str, Any]:
+    """Dispatch extraction in-process unless page metadata requests uv."""
     metadata = payload.get("metadata")
     pyproject = metadata.get("pyproject") if isinstance(metadata, dict) else None
     if isinstance(pyproject, str) and pyproject.strip():
@@ -101,10 +111,12 @@ def run_extractor(payload: dict[str, Any]) -> dict[str, Any]:
                 f"{shlex.join(command)}\n{result.stderr}\n{result.stdout}".strip()
             ) from exc
 
+    # MyST reads extractor JSON from stdout; user cell stdout must stay off it.
     with redirect_stdout(sys.stderr):
         return asyncio.run(extract(payload))
 
 
 def main() -> None:
     payload = json.loads(sys.stdin.read())
+    # Subprocess callers expect stdout to be JSON only; diagnostics belong on stderr.
     sys.stdout.write(json.dumps(run_extractor(payload)))

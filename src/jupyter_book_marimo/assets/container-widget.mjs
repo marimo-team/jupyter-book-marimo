@@ -23,6 +23,11 @@ const themeStyleId = "marimo-jupyter-book-theme";
 const shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
 const customStyleAttribute = "data-jupyter-book-marimo-custom-style";
 
+/*
+ * One marimo app can be split across many anywidget outputs. Keep page-global
+ * runtime state here, then release mount-owned observers and shared nodes when
+ * each anywidget unmounts.
+ */
 const loadedModules = new Map();
 const notebookCodeNodes = new Map();
 const appRecords = new Map();
@@ -209,6 +214,7 @@ const shadowThemeCss = `
 }
 `;
 
+// Read anywidget models without assuming the host uses Backbone-style .get().
 function getModelValue(model, key, fallback = "") {
   if (model && typeof model.get === "function") {
     const value = model.get(key);
@@ -245,6 +251,7 @@ function getModelStyleBlocks(model) {
     .map((item) => ({ id: item.id, css: item.css }));
 }
 
+// Normalize exported island fragments before mounting them into light DOM.
 function parseHtml(html) {
   const template = document.createElement("template");
   template.innerHTML = typeof html === "string" ? html : "";
@@ -276,6 +283,7 @@ function appIdFrom(fragment, notebookCode) {
   return notebookCode ? `marimo-${stringHash(notebookCode)}` : "";
 }
 
+// marimo's runtime reads this global while its module evaluates.
 function installExportContext(notebookCode) {
   if (!notebookCode) return;
   Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
@@ -286,6 +294,11 @@ function installExportContext(notebookCode) {
 }
 
 function retainNotebookCode(appId, notebookCode) {
+  /*
+   * marimo discovers exported notebook source from light-DOM marimo-code nodes.
+   * anywidget renders in a shadow root, so the bridge hoists one hidden shared
+   * source node per app and reference-counts it across outputs.
+   */
   if (!appId || !notebookCode) return () => {};
 
   const existing = notebookCodeNodes.get(appId);
@@ -337,6 +350,7 @@ function modulesFromFragment(fragment) {
 }
 
 function assetsFromModel(model, head) {
+  // Prefer structured assets from Python; fall back to old head HTML payloads.
   const assets = getModelValue(model, "assets", {});
   const record = assets && typeof assets === "object" ? assets : {};
   return {
@@ -347,6 +361,7 @@ function assetsFromModel(model, head) {
   };
 }
 
+// Load marimo runtime assets once while preserving same-origin bridge loading.
 function ensureLinks(links) {
   for (const attrs of links) {
     if (!attrs?.href) continue;
@@ -434,6 +449,7 @@ function ensureCustomStyleBlocks(root, styleBlocks) {
 }
 
 function ensureModule(src) {
+  // Dynamic import is the browser-visible equivalent of loading marimo's head.
   const href = new URL(src, document.baseURI).href;
   if (loadedModules.has(href)) return loadedModules.get(href);
 
@@ -449,6 +465,10 @@ function ensureModule(src) {
 }
 
 function appRecord(appId) {
+  /*
+   * One payload-bearing island boots the marimo app. Sibling islands with the
+   * same appId share this readiness promise instead of re-importing assets.
+   */
   const existing = appRecords.get(appId);
   if (existing) return existing;
 
@@ -505,6 +525,7 @@ function releaseApp(appId) {
   appRecords.delete(appId);
 }
 
+// Mirror book theme and custom styles across marimo's nested shadow roots.
 function ensureThemeStyle() {
   if (document.getElementById(themeStyleId)) return;
 
@@ -587,6 +608,10 @@ function luminanceFromColor(value) {
 }
 
 function colorSchemeFromDocument() {
+  /*
+   * Book themes expose dark/light state inconsistently, so prefer explicit
+   * tokens and fall back to computed color before consulting OS preference.
+   */
   for (const element of [document.documentElement, document.body]) {
     const explicit = explicitThemeFromElement(element);
     if (explicit) return explicit;
@@ -648,6 +673,7 @@ function refreshThemedRoots() {
 }
 
 function rememberShadowStyles(shadow, stylesheets, styleBlocks) {
+  // A shadow root can be discovered by multiple mounts; merge style state.
   const existing = observedShadowRootStyles.get(shadow) ?? {
     stylesheets: [],
     styleBlocks: [],
@@ -671,6 +697,7 @@ function observeShadowRoot(shadow, stylesheets, styleBlocks, owner) {
   rememberShadowStyles(shadow, stylesheets, styleBlocks);
   let record = observedShadowRoots.get(shadow);
   if (!record) {
+    // marimo components can attach deeper shadow roots after the first pass.
     const observer = new MutationObserver(() => {
       const customStyles = observedShadowRootStyles.get(shadow) ?? {
         stylesheets: [],
@@ -736,6 +763,11 @@ function installShadowTheme(root, stylesheets = [], styleBlocks = [], owner = nu
 }
 
 function scheduleShadowTheme(mount, stylesheets = [], styleBlocks = []) {
+  /*
+   * marimo UI creates shadow roots asynchronously. The timed passes catch roots
+   * attached after React/custom-element hydration, and the observer handles
+   * later nested UI changes.
+   */
   ensureThemeObserver();
   const normalized = normalizedStylesheetHrefs(stylesheets);
   const blocks = normalizedStyleBlocks(styleBlocks);
@@ -763,6 +795,7 @@ function stripHeadOnlyNodes(fragment) {
 }
 
 function suppressMimeRenderers(root, mimetypes) {
+  // Used after `error: false`: keep successful output, remove error renderers.
   if (mimetypes.length === 0) return;
 
   root.querySelectorAll("marimo-mime-renderer").forEach((node) => {
@@ -796,6 +829,11 @@ function isDisplayCodeEditor(node) {
 }
 
 function shouldDeferServerRuntimeElement(node) {
+  /*
+   * Server-rendered interactive elements are stale placeholders until browser
+   * marimo recreates them. Display-code editors are static source views, so
+   * leave those in place.
+   */
   if (isDisplayCodeEditor(node)) {
     return false;
   }
@@ -824,6 +862,10 @@ function canUsePendingPreview(node) {
 }
 
 function replaceWithPendingPreview(node) {
+  /*
+   * Preserve static HTML as a dimmed preview only when it does not itself contain
+   * live marimo runtime elements that the browser will recreate.
+   */
   const wrapper = document.createElement("div");
   wrapper.className = pendingClass;
   wrapper.setAttribute("aria-busy", "true");
@@ -885,6 +927,7 @@ function refreshPendingPreviews(root) {
 }
 
 function schedulePendingPreviews(root) {
+  // Preview visibility can change after fonts, custom elements, or layout settle.
   refreshPendingPreviews(root);
   requestAnimationFrame(() => refreshPendingPreviews(root));
   for (const delay of [100, 500, 1500, 3000]) {
@@ -924,6 +967,10 @@ function syncIslandCellContainers(root) {
 }
 
 function scheduleIslandCellContainers(root) {
+  /*
+   * The browser runtime resolves `data-cell-idx` to `cellId` asynchronously.
+   * Retry and observe so plugin-facing div#cell-* wrappers appear once IDs land.
+   */
   syncIslandCellContainers(root);
 
   const frame = requestAnimationFrame(() => syncIslandCellContainers(root));
@@ -947,6 +994,11 @@ function clearHost(host) {
 }
 
 function createLightDomMount(el) {
+  /*
+   * anywidget gives us a shadow host, but marimo's runtime queries light DOM.
+   * Slot the host's shadow contents and mount beside the host so marimo's DOM
+   * walks can find notebook source, islands, and cell wrappers.
+   */
   const root = el.getRootNode();
   const host = root instanceof ShadowRoot ? root.host : el;
 
@@ -1019,6 +1071,10 @@ function isOutputBodyEmpty(output) {
 }
 
 function mountMarimo(model, el) {
+  /*
+   * Mount static HTML immediately, then hydrate when the shared app runtime is
+   * ready. Empty outputs can still carry the runtime payload for the whole page.
+   */
   const output = readOutputModel(model);
   const mount = createLightDomMount(el);
 

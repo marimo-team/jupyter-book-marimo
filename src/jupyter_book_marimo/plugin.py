@@ -1,4 +1,9 @@
-"""Executable MyST plugin and document transform for marimo code fences."""
+"""Translate MyST code nodes into anywidget-backed marimo islands.
+
+The plugin owns document-tree concerns: finding source context, invoking the
+runtime extractor once per page, copying the bridge asset, and replacing code
+nodes with widget nodes.
+"""
 
 from __future__ import annotations
 
@@ -46,6 +51,8 @@ CodeSignature = tuple[int, str, str]
 
 
 class SourceContext(NamedTuple):
+    """Source metadata and raw fence options matched to the MyST tree."""
+
     metadata: dict[str, Any]
     options_by_signature: dict[CodeSignature, CellOptions]
     path: Path | None
@@ -141,6 +148,13 @@ def source_page_context(
     root: Path | None = None,
     pages: tuple[SourcePage, ...] | None = None,
 ) -> SourceContext:
+    """Recover raw Markdown context for the current parsed MyST tree.
+
+    MyST drops some fence attributes, so the plugin scans Markdown files and
+    joins raw fences back to parsed code nodes by `(line, language, code)`.
+    If more than one page matches the same tree, the build fails instead of
+    guessing which frontmatter and fence options apply.
+    """
     signatures = code_signatures(tree) if tree is not None else None
     best_pages: list[SourcePage] = []
     best_score = 0
@@ -198,12 +212,14 @@ def source_options_for_node(
 
 
 def synthetic_filename(cells: list[Cell]) -> str:
+    """Create a stable fallback filename when MyST gives no source path."""
     body = "\n\n".join(cell.code for cell in cells)
     digest = hashlib.sha1(body.encode("utf-8")).hexdigest()[:12]
     return f"jupyter-book-marimo-{digest}.md"
 
 
 def source_identity(path: Path | None, cells: list[Cell]) -> str:
+    """Prefer a repo-relative page identity so browser app IDs are stable."""
     if path is None:
         return synthetic_filename(cells)
     try:
@@ -224,6 +240,12 @@ def is_external_stylesheet(value: str) -> bool:
 
 
 def custom_style_asset(stylesheet: str) -> tuple[str | None, dict[str, str] | None]:
+    """Classify custom stylesheets by how the built book can serve them.
+
+    External URLs and root-relative book paths stay as hrefs. Local files are
+    embedded into the widget model so the bridge can inject them into marimo
+    shadow roots without depending on another static asset path.
+    """
     if not stylesheet:
         raise ValueError("Stylesheet path cannot be empty")
 
@@ -284,12 +306,12 @@ def generated_dir() -> Path:
 
 
 def generated_asset_url(filename: str) -> str:
+    """Return the source-relative URL MyST will fingerprint into the build."""
     return f"/{GENERATED_DIR}/{filename}"
 
 
 def widget_esm() -> str:
-    # MyST anywidget nodes need a browser-loadable ESM URL. The generated
-    # directory gives Jupyter Book a same-origin copy of the packaged bridge.
+    """Copy the bridge into docs and return the anywidget ESM source URL."""
     target_dir = generated_dir()
     target = target_dir / CONTAINER_WIDGET
     source = files("jupyter_book_marimo.assets").joinpath(CONTAINER_WIDGET)
@@ -309,6 +331,7 @@ def output_node(
     custom_stylesheets: list[str] | None = None,
     custom_style_blocks: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
+    """Return an anywidget node or a visible fallback for missing output."""
     if not isinstance(output, dict) or not isinstance(output.get("html"), str):
         digest = hashlib.sha1(source.encode("utf-8")).hexdigest()[:8]
         return {
@@ -403,6 +426,7 @@ def transform_document(
 
 
 def declare_result(content: Any) -> None:
+    """Emit MyST executable-plugin JSON and stop the CLI cleanly."""
     json.dump(content, sys.stdout)
     raise SystemExit(0)
 

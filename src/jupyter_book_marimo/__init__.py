@@ -1,4 +1,8 @@
-"""Executable MyST plugin for rendering marimo cells in Jupyter Book."""
+"""Package entrypoint for the Jupyter Book executable plugin.
+
+The package keeps imports cheap and exposes the console-script main function
+lazily so discovery does not load the transform pipeline until needed.
+"""
 
 from __future__ import annotations
 

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Execute page-level marimo cells for the Jupyter Book plugin."""
+"""Execute collected marimo cells and serialize hydratable islands.
+
+The extractor owns marimo-specific behavior: language conversion, execution
+planning, runtime asset capture, browser cell IDs, and per-cell output models.
+"""
 
 from __future__ import annotations
 
@@ -47,6 +51,7 @@ DEFAULT_SQL_QUERY_TARGET = "_df"
 
 
 def version_tuple(version: str) -> tuple[int, int, int]:
+    """Compare marimo versions without pulling in packaging at runtime."""
     match = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
     if match is None:
         return (0, 0, 0)
@@ -62,7 +67,7 @@ if version_tuple(marimo.__version__) < version_tuple(MIN_MARIMO_VERSION):
 
 
 class ReadOnlyFilesystemStorage(FilesystemStorage):
-    """Let marimo read source-relative files without rewriting book sources."""
+    """Preserve source-relative reads while no-oping save/rename side effects."""
 
     def write(self, path: Path, content: str) -> None:  # noqa: ARG002
         return None
@@ -90,6 +95,8 @@ class HeadAssetParser(HTMLParser):
 
 
 class AttributeParser(HTMLParser):
+    """Read attributes from one rendered HTML tag without a DOM dependency."""
+
     def __init__(self) -> None:
         super().__init__()
         self.attrs: dict[str, str] = {}
@@ -107,6 +114,7 @@ def is_valid_python_identifier(name: str) -> bool:
 
 
 def sql_query_target(query: Any) -> str:
+    """Default unsafe or missing SQL output names to a predictable variable."""
     target = str(query or DEFAULT_SQL_QUERY_TARGET)
     if is_valid_python_identifier(target):
         return target
@@ -123,6 +131,7 @@ def sql_code_to_python(
 
 
 def source_for_cell(cell: dict[str, Any]) -> str:
+    """Convert SQL and Markdown authoring cells before marimo sees them."""
     options = normalized_options(cell.get("options") or {})
     code = str(cell.get("code") or "")
     language = str(options.get("language") or "python").lower()
@@ -190,6 +199,8 @@ def output_model(
 
 @dataclass(frozen=True)
 class CellPlan:
+    """Resolved execution and visibility decisions for one authored cell."""
+
     index: int
     start_line: int | None
     config: ExecutionOptions
@@ -246,6 +257,7 @@ class CellPlan:
         )
 
     def compile_error_output(self) -> dict[str, Any]:
+        """Show source when an echo/editor cell cannot become Python code."""
         return output_model(
             visible_code_html(
                 self.original_code,
@@ -262,6 +274,7 @@ class PendingCellOutput:
 
 
 def normalized_mimetype(value: str) -> str:
+    """Match marimo's escaped MIME attributes against plugin options."""
     return html.unescape(value).strip().strip("\"'")
 
 
@@ -299,6 +312,7 @@ def has_error_mimetype(island: str) -> bool:
 
 
 def page_digest(filename: str) -> str:
+    """Keep app and cell IDs stable without leaking long source paths."""
     return hashlib.sha1(filename.encode("utf-8")).hexdigest()[:12]
 
 
@@ -313,6 +327,7 @@ def build_export_notebook_code(
     cell_prefix: str,
     header: str = "",
 ) -> str:
+    """Export notebook code plus page header and sandbox metadata."""
     notebook_code = AppFileManager.from_app(generator._app).to_code()
     notebook_code = install_browser_cell_prefix(notebook_code, cell_prefix)
     header = dedent(header).strip()
@@ -325,7 +340,12 @@ def build_export_notebook_code(
 
 
 def install_browser_cell_prefix(notebook_code: str, cell_prefix: str) -> str:
-    """Make browser-generated cell IDs match the server export."""
+    """Install the same CellManager prefix used by server-rendered islands.
+
+    The server HTML is rewritten to `data-cell-idx`; when the browser runtime
+    rebuilds cells, this prefix makes index-resolved cell IDs match the DOM IDs
+    expected by marimo plugins.
+    """
     try:
         tree = ast.parse(notebook_code)
     except SyntaxError as exc:
@@ -399,6 +419,9 @@ async def build_generator(generator: MarimoIslandGenerator, filename: str) -> bo
     if generator.has_run:
         raise ValueError("marimo generator can only be built once")
 
+    # marimo's exporter needs a file manager, but this plugin must not rewrite
+    # docs sources. The private assignments give marimo a source-relative
+    # filename and then connect each island stub to the completed session view.
     file_manager = AppFileManager.from_app(generator._app)
     file_manager.storage = ReadOnlyFilesystemStorage()
     file_manager.filename = filename
@@ -425,6 +448,8 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     document_options = metadata if isinstance(metadata, dict) else {}
     app_id = "jb-" + page_digest(identity)
     generator = MarimoIslandGenerator(app_id=app_id)
+    # Keep server-side IDs in the same namespace the browser runtime will use
+    # after it maps each island's `data-cell-idx` back to a generated cell ID.
     generator._app._app._cell_manager = CellManager(prefix=page_cell_prefix(identity))
     outputs: list[dict[str, Any] | None] = []
     pending_outputs: list[PendingCellOutput] = []
@@ -469,6 +494,8 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
         notebook_code = ""
         assets = {}
 
+    # Only the first included island carries notebook code and runtime assets;
+    # later islands share the appId and wait for that app to become ready.
     runtime_payload_index = next(
         (pending.plan.index for pending in pending_outputs if pending.plan.include),
         None,
@@ -477,6 +504,8 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
         plan = pending.plan
         html_output = use_browser_cell_index(pending.stub.render(), cell_index)
         if not as_bool(plan.config.get("error"), True):
+            # `error: false` is build-strict: fail on real execution errors,
+            # otherwise strip rendered error MIME nodes from allowed outputs.
             if did_error and has_error_mimetype(html_output):
                 location = (
                     f"{filename}:{plan.start_line}" if plan.start_line else filename
@@ -511,6 +540,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> None:
     payload = json.loads(sys.stdin.read())
+    # Keep the subprocess protocol clean: stdout is JSON, user stdout is stderr.
     with redirect_stdout(sys.stderr):
         result = asyncio.run(extract(payload))
     sys.stdout.write(json.dumps(result))
