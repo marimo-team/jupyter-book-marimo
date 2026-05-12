@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" },
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "marimo>=0.23.5",
     "pyyaml>=6.0.3",
