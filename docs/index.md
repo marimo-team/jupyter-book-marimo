@@ -67,6 +67,13 @@ with dependencies. The plugin runs those pages with `uv`, then emits
 same-origin bridge assets for the static site. marimo's island runtime is still
 loaded from the runtime URLs emitted by marimo.
 
+Pages can also set default execution options under `options.marimo`; cell
+attributes override those defaults. The plugin recognizes `eval`, `echo`,
+`editor`, `hide_code`, `hide_output`, `output`, `error`, `warning`, `disabled`,
+`unparseable`/`unparsable`, and `include`. SQL fences additionally accept
+`query` for the output variable and `engine` for the marimo SQL engine object.
+`warning` is parsed for Quarto-style option compatibility.
+
 The build also creates `.jupyter-book-marimo/container-widget.mjs`. That file is
 a generated same-origin copy of the packaged anywidget bridge; edit
 `src/jupyter_book_marimo/assets/container-widget.mjs` instead.
@@ -104,7 +111,7 @@ JUPYTER_BOOK_MARIMO_STYLESHEETS=styles/jupyter-book-marimo.css \
 The plugin embeds local stylesheets into the widget model and injects them
 after the default bridge CSS in both the page and marimo-owned shadow roots.
 The same hook is available as repeated `--style` flags if the plugin executable
-is wrapped. This example book uses the hook for a tiny
+is wrapped. This docs site uses the hook for a tiny
 `styles/jupyter-book-marimo.css` stylesheet that polishes the external widget
 demo. Internal marimo selectors in that stylesheet are site-specific escape
 hatches, not plugin API.

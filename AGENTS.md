@@ -19,10 +19,10 @@ make test
 # Build the package
 make build
 
-# Build the example Jupyter Book as static HTML
+# Build docs as static HTML
 make book-build
 
-# Serve the example book locally
+# Serve docs locally
 make book-start
 ```
 
@@ -46,7 +46,8 @@ The transform:
 3. Executes the collected cells through `runtime.py`.
 4. Copies `container-widget.mjs` into `.jupyter-book-marimo/` so Jupyter Book
    can serve the anywidget bridge as a same-origin ESM asset.
-5. Emits a MyST `anywidget` node for each marimo output.
+5. Attaches custom stylesheet hrefs or embedded CSS blocks to the widget model.
+6. Emits a MyST `anywidget` node for each marimo output.
 
 ### Extractor (`src/jupyter_book_marimo/extract.py`)
 
@@ -96,9 +97,13 @@ mo.md("hello")
 ```
 ````
 
-Supported languages are `python`, `sql`, and `markdown`. Options live in the
-same attribute block: `eval`, `echo`, `editor`, `hide_code`, `hide_output`,
-`disabled`, `unparseable`, `include`, and SQL-specific options such as `query`.
+Supported languages are `python`, `sql`, and `markdown`, with authoring aliases
+such as `py`, `python3`, `md`, and `marimo` normalized by `authoring.py`.
+Options live in the same attribute block: `eval`, `echo`, `editor`,
+`hide_code`, `hide_output`, `output`, `error`, `warning`, `disabled`,
+`unparseable`, `unparsable`, and `include`. SQL-specific options include
+`query` for the output variable and `engine` for the marimo SQL engine object.
+`warning` is parsed for Quarto-style option compatibility.
 
 Page-level metadata is written under the `options.marimo` YAML frontmatter key:
 
@@ -108,6 +113,9 @@ options:
   marimo:
     header: |
       # Python inserted before exported notebook code
+    eval: true
+    output: true
+    error: true
     pyproject: |
       requires-python = ">=3.10"
       dependencies = ["pandas", "marimo>=0.23.5"]
@@ -125,7 +133,7 @@ jupyter-book-marimo/
 │   ├── runtime.py                # in-process vs uv sandbox execution
 │   └── assets/container-widget.mjs
 ├── tests/                        # pytest unit tests
-├── docs/                         # example Jupyter Book application surface
+├── docs/                         # Jupyter Book docs application surface
 ├── Makefile
 └── pyproject.toml
 ```

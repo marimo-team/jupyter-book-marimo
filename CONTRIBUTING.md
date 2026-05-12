@@ -8,10 +8,15 @@ Thank you for your interest in contributing.
 | -------------------------------- | -------------------------------------------------------- |
 | [uv](https://docs.astral.sh/uv/) | Manages Python, dependencies, tests, and builds          |
 | Python 3.10+                     | Required by the package                                  |
-| Jupyter Book 2.x                 | Builds the example book through the dev dependency group |
+| Jupyter Book >=2.1.5             | Builds the docs site through the dev dependency group    |
 
-Install dependencies by running any `uv run ...` command from the repo root.
-`uv` will create and maintain `.venv/`.
+Install dependencies from the repo root:
+
+```bash
+uv sync --dev
+```
+
+`uv` creates and maintains `.venv/`.
 
 ## Development Workflow
 
@@ -26,8 +31,8 @@ Install dependencies by running any `uv run ...` command from the repo root.
 | `make test`         | Run tests                                           |
 | `make check`        | Run format check, lint, typecheck, tests, and build |
 | `make build`        | Build the package with `uv build`                   |
-| `make book-build`   | Build the example Jupyter Book as strict static HTML |
-| `make book-start`   | Serve the example book locally                      |
+| `make book-build`   | Build docs as strict static HTML                    |
+| `make book-start`   | Serve docs locally                                  |
 | `make clean`        | Remove build artifacts                              |
 
 ### Linting and formatting
@@ -50,7 +55,7 @@ make test
 uv run pytest tests/test_extract.py::test_reactive_islands_use_browser_cell_indexes
 ```
 
-### Building the example book
+### Building Docs
 
 ```bash
 make book-build
@@ -88,7 +93,7 @@ jupyter-book-marimo/
 │   ├── runtime.py                # sandbox dispatch
 │   └── assets/container-widget.mjs # Jupyter Book anywidget -> marimo island bridge
 ├── tests/                        # pytest unit tests
-├── docs/                         # example Jupyter Book
+├── docs/                         # Jupyter Book docs site
 └── Makefile
 ```
 

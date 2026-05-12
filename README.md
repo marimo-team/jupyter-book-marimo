@@ -32,8 +32,8 @@ project:
       path: .venv/bin/jupyter-book-marimo
 ```
 
-Use the path that matches your environment. In this repo's example book, the
-docs live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`.
+Use the path that matches your environment. In this repo's docs site, the docs
+live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`.
 
 **3.** Author marimo cells as ordinary MyST language fences.
 
@@ -56,35 +56,46 @@ slider
 jupyter-book build --html
 ```
 
-## Features
+## Authoring Options
 
 The plugin keeps the authoring surface close to MyST:
 
-| Feature           | How                                 |
-| ----------------- | ----------------------------------- |
-| Python cells      | ` ```python {.marimo} `             |
-| SQL cells         | ` ```sql {.marimo query="result"} ` |
-| Markdown cells    | ` ```markdown {.marimo} `           |
-| Editable code     | `editor="true"`                     |
-| Show source       | `echo="true"`                       |
-| Hide source       | `hide_code="true"`                  |
-| Hide output       | `hide_output="true"`                |
-| Skip execution    | `eval="false"`                      |
-| Disable execution | `disabled="true"`                   |
-| Omit cell         | `include="false"`                   |
+| Feature             | How                                                        |
+| ------------------- | ---------------------------------------------------------- |
+| Python cells        | ` ```python {.marimo} `                                    |
+| SQL cells           | ` ```sql {.marimo query="result"} `                        |
+| Markdown cells      | ` ```markdown {.marimo} `                                  |
+| Show code/editor    | `editor="true"`                                            |
+| Show source         | `echo="true"`                                              |
+| Hide source         | `hide_code="true"`                                         |
+| Hide output         | `hide_output="true"` or `output="false"`                   |
+| Skip execution      | `eval="false"`                                             |
+| Fail on cell errors | `error="false"`                                            |
+| Disable execution   | `disabled="true"`                                          |
+| Mark bad syntax     | `unparseable="true"` or the accepted alias `unparsable`    |
+| Omit rendered cell  | `include="false"`                                          |
+| SQL result name     | `query="result"`                                           |
+| SQL engine object   | `engine="engine"`                                          |
 
 Cells render output only by default.
+The parser also accepts `warning` for Quarto-style option compatibility.
 
-## Page Dependencies
+The same execution options can be set as page defaults under
+`options.marimo` frontmatter. Cell attributes override page defaults.
+
+## Page Metadata
 
 Add `options.marimo.pyproject` frontmatter to declare page-local dependencies.
 The plugin converts this metadata into `uv run` arguments using marimo's
-sandbox logic.
+sandbox logic. Add `options.marimo.header` when a page needs Python inserted
+before the exported notebook code.
 
 ```yaml
 ---
 options:
   marimo:
+    header: |
+      import marimo as mo
     pyproject: |
       requires-python = ">=3.10"
       dependencies = [
@@ -138,12 +149,12 @@ document and marimo-owned shadow roots. External `https://...` and site-root
 `--style` flags, which is useful if your Jupyter Book plugin path points at a
 small wrapper script.
 
-The example book uses this hook for
+The docs site uses this hook for
 `docs/styles/jupyter-book-marimo.css`. That stylesheet is intentionally
 site-specific; internal marimo selectors in custom CSS are an escape hatch, not
 the plugin's public styling API.
 
-## Example Book
+## Docs Site
 
 This repo includes a small Jupyter Book in `docs/`. It is an integration
 fixture for `jupyter-book-marimo`, not a general Jupyter Book publishing guide.
