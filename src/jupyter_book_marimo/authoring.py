@@ -172,7 +172,7 @@ def _unquote(value: str) -> str:
 def parse_scalar(value: Any) -> str | int | float | bool | None:
     """Coerce attribute/frontmatter scalars into the types execution expects."""
     if value is None:
-        return ""
+        return None
     if isinstance(value, bool | int | float):
         return value
     text = _unquote(str(value).strip())
@@ -373,7 +373,9 @@ def metadata_from_frontmatter(frontmatter: dict[str, Any]) -> dict[str, Any]:
             metadata[key] = value
     for key in PAGE_EXECUTION_OPTION_KEYS:
         if key in marimo:
-            metadata[key] = parse_scalar(marimo[key])
+            value = parse_scalar(marimo[key])
+            if value is not None:
+                metadata[key] = value
     return metadata
 
 

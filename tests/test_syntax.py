@@ -5,6 +5,7 @@ from jupyter_book_marimo.authoring import (
     metadata_from_frontmatter,
     parse_code_meta,
     parse_plain_fence_info,
+    parse_scalar,
     read_frontmatter,
     source_page,
     source_fences,
@@ -81,6 +82,21 @@ options:
         "hide_code": True,
         "hide_output": True,
     }
+
+
+def test_metadata_ignores_null_execution_options() -> None:
+    frontmatter = read_frontmatter(
+        """---
+options:
+  marimo:
+    eval: null
+    echo: true
+---
+"""
+    )
+
+    assert parse_scalar(None) is None
+    assert metadata_from_frontmatter(frontmatter) == {"echo": True}
 
 
 def test_code_cell_from_node_reads_regular_code_fences() -> None:
