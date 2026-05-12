@@ -47,14 +47,14 @@ mo.accordion(
     {
         "Tip: assign UI elements to global variables": (
             """
-            Interacting with a displayed UI element will only 
+            Interacting with a displayed UI element will only
             trigger reactive execution if the UI element is assigned
             to a global variable.
             """
         ),
         "Tip: accessing an element's value": (
             """
-            Every UI element has a value attribute that you can access in 
+            Every UI element has a value attribute that you can access in
             Python.
             """
         ),

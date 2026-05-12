@@ -64,11 +64,50 @@ project:
 
 Pages can opt into a sandbox by adding `options.marimo.pyproject` frontmatter
 with dependencies. The plugin runs those pages with `uv`, then emits
-same-origin runtime assets for the static site.
+same-origin bridge assets for the static site. marimo's island runtime is still
+loaded from the runtime URLs emitted by marimo.
 
 The build also creates `.jupyter-book-marimo/container-widget.mjs`. That file is
 a generated same-origin copy of the packaged anywidget bridge; edit
 `src/jupyter_book_marimo/assets/container-widget.mjs` instead.
+
+## Styling
+
+The packaged bridge owns structure, not the book palette. It exposes a small
+set of `--jbm-*` variables on the public wrapper and maps them into marimo-owned
+shadow roots.
+
+For ordinary theme integration, style the public wrapper with normal book CSS:
+
+```css
+.marimo-jupyter-book-output {
+  --jbm-background: var(--myst-color-background);
+  --jbm-foreground: var(--myst-color-text);
+  --jbm-surface: var(--myst-color-surface);
+  --jbm-border: var(--myst-color-border);
+  --jbm-link: var(--myst-color-link);
+  --jbm-accent: var(--myst-color-primary);
+  --jbm-code-bg: var(--myst-color-surface);
+  --jbm-code-fg: var(--myst-color-text);
+  --jbm-code-border: var(--myst-color-border);
+}
+```
+
+When a site needs to reach marimo internals inside shadow DOM, provide a
+stylesheet during the build:
+
+```bash
+JUPYTER_BOOK_MARIMO_STYLESHEETS=styles/jupyter-book-marimo.css \
+  jupyter-book build --html
+```
+
+The plugin embeds local stylesheets into the widget model and injects them
+after the default bridge CSS in both the page and marimo-owned shadow roots.
+The same hook is available as repeated `--style` flags if the plugin executable
+is wrapped. This example book uses the hook for a tiny
+`styles/jupyter-book-marimo.css` stylesheet that polishes the external widget
+demo. Internal marimo selectors in that stylesheet are site-specific escape
+hatches, not plugin API.
 
 For Jupyter Book build and publishing details beyond this plugin integration,
 use the official Jupyter Book docs:

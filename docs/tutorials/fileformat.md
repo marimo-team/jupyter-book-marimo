@@ -353,5 +353,10 @@ with open(__file__, "r", encoding="utf-8") as f:
 ```
 
 ```python {.marimo}
-mo.ui.code_editor(contents)
+mo.ui.code_editor(
+    value=contents,
+    language="python",
+    disabled=True,
+    max_height=640,
+)
 ```

@@ -7,7 +7,7 @@ Thank you for your interest in contributing.
 | Tool                             | Purpose                                                  |
 | -------------------------------- | -------------------------------------------------------- |
 | [uv](https://docs.astral.sh/uv/) | Manages Python, dependencies, tests, and builds          |
-| Python 3.12+                     | Required by the package                                  |
+| Python 3.10+                     | Required by the package                                  |
 | Jupyter Book 2.x                 | Builds the example book through the dev dependency group |
 
 Install dependencies by running any `uv run ...` command from the repo root.
@@ -83,10 +83,9 @@ generated copy.
 jupyter-book-marimo/
 ├── src/jupyter_book_marimo/
 │   ├── plugin.py                 # MyST executable plugin entrypoint
+│   ├── authoring.py              # frontmatter, fence parsing, execution options
 │   ├── extract.py                # marimo execution and island export
 │   ├── runtime.py                # sandbox dispatch
-│   ├── sandbox.py                # uv run argument helper
-│   ├── syntax.py                 # MyST fence parsing
 │   └── assets/container-widget.mjs # Jupyter Book anywidget -> marimo island bridge
 ├── tests/                        # pytest unit tests
 ├── docs/                         # example Jupyter Book

@@ -7,7 +7,7 @@ Use it when you want normal MyST pages with reactive marimo cells embedded
 inside the Jupyter Book site.
 
 > [!NOTE]
-> This plugin requires `marimo>=0.23.5` and Python 3.12+.
+> This plugin requires `marimo>=0.23.5` and Python 3.10+.
 
 ## Quick Start
 
@@ -69,7 +69,9 @@ The plugin keeps the authoring surface close to MyST:
 | Show source       | `echo="true"`                       |
 | Hide source       | `hide_code="true"`                  |
 | Hide output       | `hide_output="true"`                |
+| Skip execution    | `eval="false"`                      |
 | Disable execution | `disabled="true"`                   |
+| Omit cell         | `include="false"`                   |
 
 Cells render output only by default.
 
@@ -84,7 +86,7 @@ sandbox logic.
 options:
   marimo:
     pyproject: |
-      requires-python = ">=3.12"
+      requires-python = ">=3.10"
       dependencies = [
           "pandas",
           "marimo>=0.23.5",
@@ -93,6 +95,53 @@ options:
 ```
 
 Pages without `options.marimo.pyproject` execute in-process.
+
+## Styling
+
+The packaged bridge owns structure, not your palette. It mounts marimo output,
+shows the disabled preview/skeleton while the runtime is starting, and maps a
+small set of `--jbm-*` variables into marimo-owned shadow roots.
+
+For normal theme integration, use your book's CSS and override the public
+variables:
+
+```css
+.marimo-jupyter-book-output {
+  --jbm-background: var(--myst-color-background);
+  --jbm-foreground: var(--myst-color-text);
+  --jbm-surface: var(--myst-color-surface);
+  --jbm-border: var(--myst-color-border);
+  --jbm-link: var(--myst-color-link);
+  --jbm-accent: var(--myst-color-primary);
+  --jbm-code-bg: var(--myst-color-surface);
+  --jbm-code-fg: var(--myst-color-text);
+  --jbm-code-border: var(--myst-color-border);
+}
+
+.your-dark-theme-selector .marimo-jupyter-book-output {
+  --jbm-code-bg: var(--myst-color-surface);
+  --jbm-code-fg: var(--myst-color-text);
+}
+```
+
+If you need to style elements inside marimo's shadow DOM, pass a custom
+stylesheet at build time:
+
+```bash
+JUPYTER_BOOK_MARIMO_STYLESHEETS=styles/jupyter-book-marimo.css \
+  jupyter-book build --html
+```
+
+Local stylesheets are embedded into the widget model and injected into both the
+document and marimo-owned shadow roots. External `https://...` and site-root
+`/...` stylesheets are linked as-is. The executable also accepts repeated
+`--style` flags, which is useful if your Jupyter Book plugin path points at a
+small wrapper script.
+
+The example book uses this hook for
+`docs/styles/jupyter-book-marimo.css`. That stylesheet is intentionally
+site-specific; internal marimo selectors in custom CSS are an escape hatch, not
+the plugin's public styling API.
 
 ## Example Book
 

@@ -151,7 +151,7 @@ module_not_found_explainer = mo.md(
     """
     ## Oops!
 
-    It looks like you're missing a package that this tutorial 
+    It looks like you're missing a package that this tutorial
     requires.
 
     Use the package manager panel on the left to install **numpy** and **matplotlib**,

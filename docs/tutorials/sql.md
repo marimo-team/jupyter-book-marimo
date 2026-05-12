@@ -9,6 +9,8 @@ options:
       dependencies = [
           "marimo[sql]>=0.23.5",
           "matplotlib",
+          "altair",
+          "plotly",
           "pandas",
       ]
 ---

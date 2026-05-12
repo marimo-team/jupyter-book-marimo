@@ -61,8 +61,9 @@ page-local `CellManager` prefix into the exported notebook code.
 ### Runtime bridge (`src/jupyter_book_marimo/assets/container-widget.mjs`)
 
 Jupyter Book renders anywidgets in a shadow root. marimo islands expect light
-DOM, a hidden notebook source node, and same-origin runtime assets. The
-container widget is the boundary between those systems.
+DOM and a hidden notebook source node. The container widget is the boundary
+between those systems and is served as a same-origin bridge asset; marimo's
+island runtime URLs still come from marimo's generated island head.
 
 The generated `.jupyter-book-marimo/` directory is only the served copy of that
 bridge; the maintained source is
@@ -73,11 +74,15 @@ app, loads marimo island assets once, installs plugin styling, mirrors theme
 state into nested shadow roots, and forces document navigation for same-origin
 page changes so Jupyter Book does not reuse a stale marimo runtime bridge.
 
-### Sandbox helper (`src/jupyter_book_marimo/sandbox.py`)
+### Authoring parser (`src/jupyter_book_marimo/authoring.py`)
+
+Authoring concerns live in one small parser module. It reads YAML frontmatter
+with PyYAML, extracts `options.marimo`, parses `.marimo` fence attributes, and
+normalizes execution options shared by the plugin and extractor.
 
 Page-level dependencies live in `options.marimo.pyproject` YAML frontmatter.
-The helper converts that TOML block into `uv run` arguments by reusing marimo's
-sandbox parsing instead of maintaining a second dependency parser.
+`runtime.py` converts that TOML block into `uv run` arguments by reusing
+marimo's sandbox parsing instead of maintaining a second dependency parser.
 
 ## Authoring Surface
 
@@ -92,8 +97,8 @@ mo.md("hello")
 ````
 
 Supported languages are `python`, `sql`, and `markdown`. Options live in the
-same attribute block: `echo`, `editor`, `hide_code`, `hide_output`, `disabled`,
-`unparseable`, `include`, and SQL-specific options such as `query`.
+same attribute block: `eval`, `echo`, `editor`, `hide_code`, `hide_output`,
+`disabled`, `unparseable`, `include`, and SQL-specific options such as `query`.
 
 Page-level metadata is written under the `options.marimo` YAML frontmatter key:
 
@@ -104,7 +109,7 @@ options:
     header: |
       # Python inserted before exported notebook code
     pyproject: |
-      requires-python = ">=3.12"
+      requires-python = ">=3.10"
       dependencies = ["pandas", "marimo>=0.23.5"]
 ---
 ```
@@ -115,10 +120,9 @@ options:
 jupyter-book-marimo/
 ├── src/jupyter_book_marimo/
 │   ├── plugin.py                 # MyST executable plugin entrypoint
+│   ├── authoring.py              # fence, frontmatter, and execution options
 │   ├── extract.py                # marimo execution and island export
 │   ├── runtime.py                # in-process vs uv sandbox execution
-│   ├── sandbox.py                # uv run argument construction
-│   ├── syntax.py                 # fence and metadata parsing
 │   └── assets/container-widget.mjs
 ├── tests/                        # pytest unit tests
 ├── docs/                         # example Jupyter Book application surface
