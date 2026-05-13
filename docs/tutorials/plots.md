@@ -1,36 +1,42 @@
 ---
 title: Plots
-options:
-  marimo:
-    header: |
-      # Copyright 2026 Marimo. All rights reserved
-    pyproject: |
-      requires-python = ">=3.11"
-      dependencies = [
-          "marimo>=0.23.5",
-          "matplotlib",
-          "numpy",
-      ]
 ---
+
+```{marimo-config}
+---
+header: |
+  # Copyright 2026 Marimo. All rights reserved
+pyproject: |
+  requires-python = ">=3.11"
+  dependencies = [
+      "marimo>=0.23.5",
+      "matplotlib",
+      "numpy",
+  ]
+---
+```
 
 # Plotting
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 check_dependencies()
 ```
 
-marimo supports several popular plotting libraries, including matplotlib,
-plotly, seaborn, and altair.
+marimo supports several popular plotting libraries, including matplotlib, plotly,
+seaborn, and altair.
 
-This tutorial gives examples using matplotlib; other libraries are
-used similarly.
+This tutorial gives examples using matplotlib; other libraries are used similarly.
+
 <!---->
 
 ## Matplotlib
+
 <!---->
 
-To show a plot, include it in the last expression of a cell (just
-like any other output).
+To show a plot, include it in the last expression of a cell (just like any other
+output).
 
 ```python3
 # create the plot in the last line of the cell
@@ -38,7 +44,7 @@ import matplotlib.pyplot as plt
 plt.plot([1, 2])
 ```
 
-```python {.marimo}
+```{marimo} python
 plt.plot([1, 2])
 ```
 
@@ -50,45 +56,47 @@ plt.plot([1, 2])
 plt.gca()
 ```
 
-```python {.marimo}
+```{marimo} python
 plt.plot([1, 2])
 # ... do some work ...
 # make plt.gca() the last line of the cell
 plt.gca()
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion(plt_show_explainer)
 ```
 
-**A new figure every cell.** Every cell starts with an empty figure for
-the imperative `pyplot` API.
+**A new figure every cell.** Every cell starts with an empty figure for the imperative
+`pyplot` API.
 
-```python {.marimo}
+```{marimo} python
 x = np.linspace(start=-4, stop=4, num=100, dtype=float)
 ```
 
-```python {.marimo}
+```{marimo} python
 plt.plot(x, x)
 plt.plot(x, x**2)
 plt.gca()
 ```
 
-```python {.marimo}
+```{marimo} python
 plt.plot(x, x**3)
 ```
 
-To build a figure over multiple cells, use the object-oriented API and
-create your own axis:
+To build a figure over multiple cells, use the object-oriented API and create your own
+axis:
 
-```python {.marimo}
+```{marimo} python
 _, axis = plt.subplots()
 axis.plot(x, x)
 axis.plot(x, x**2)
 axis
 ```
 
-```python {.marimo}
+```{marimo} python
 axis.plot(x, x**3)
 axis
 ```
@@ -97,7 +105,7 @@ axis
 
 Draw plots interactively by parametrizing them with UI elements.
 
-```python {.marimo}
+```{marimo} python
 exponent = mo.ui.slider(1, 5, value=1, step=1, label='exponent')
 
 mo.md(
@@ -109,14 +117,14 @@ mo.md(
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 @mo.cache
 def plot_power(exponent):
     plt.plot(x, x**exponent)
     return plt.gca()
 ```
 
-```python {.marimo}
+```{marimo} python
 _tex = (
     f"$$f(x) = x^{exponent.value}$$" if exponent.value > 1 else "$$f(x) = x$$"
 )
@@ -132,6 +140,7 @@ mo.md(
 ```
 
 ## Other libraries
+
 <!---->
 
 marimo also supports these other plotting libraries:
@@ -140,13 +149,14 @@ marimo also supports these other plotting libraries:
 - Seaborn
 - Altair
 
-Just output their figure objects as the last expression of a cell,
-or embed them in markdown with `mo.as_html`.
+Just output their figure objects as the last expression of a cell, or embed them in
+markdown with `mo.as_html`.
 
-If you would like another library to be integrated into marimo, please
-get in touch.
+If you would like another library to be integrated into marimo, please get in touch.
 
-````python {.marimo hide_code="true"}
+````{marimo} python
+:hide-code: true
+
 module_not_found_explainer = mo.md(
     """
     ## Oops!
@@ -172,7 +182,9 @@ def check_dependencies():
         return module_not_found_explainer
 ````
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 plt_show_explainer = {
     "Using `plt.show()`": """
     You can use `plt.show()` or `figure.show()` to display
@@ -182,7 +194,7 @@ plt_show_explainer = {
 }
 ```
 
-```python {.marimo}
+```{marimo} python
 try:
     import matplotlib
     import matplotlib.pyplot as plt
@@ -195,6 +207,6 @@ if not missing_packages:
     matplotlib.rcParams['figure.figsize'] = (6, 2.4)
 ```
 
-```python {.marimo}
+```{marimo} python
 import marimo as mo
 ```

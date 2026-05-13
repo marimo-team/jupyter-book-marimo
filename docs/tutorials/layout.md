@@ -1,33 +1,34 @@
 ---
 title: Layout
-options:
-  marimo:
-    header: |
-      # Copyright 2026 Marimo. All rights reserved
 ---
+
+```{marimo-config}
+:header: # Copyright 2026 Marimo. All rights reserved
+```
 
 # Layout
 
-`marimo` provides functions to help you lay out your output, such as
-in rows and columns, accordions, tabs, and callouts.
+`marimo` provides functions to help you lay out your output, such as in rows and
+columns, accordions, tabs, and callouts.
+
 <!---->
 
 ## Rows and columns
 
 Arrange objects into rows and columns with `mo.hstack` and `mo.vstack`.
 
-```python {.marimo}
+```{marimo} python
 mo.hstack(
     [mo.ui.text(label="hello"), mo.ui.slider(1, 10, label="slider")],
     justify="start",
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.vstack([mo.ui.text(label="world"), mo.ui.number(1, 10, label="number")])
 ```
 
-```python {.marimo}
+```{marimo} python
 grid = mo.vstack(
     [
         mo.hstack(
@@ -51,11 +52,10 @@ mo.md(
 )
 ```
 
-**Customization.**
-The presentation of stacked elements can be customized with some arguments
-that are best understood by example.
+**Customization.** The presentation of stacked elements can be customized with some
+arguments that are best understood by example.
 
-```python {.marimo}
+```{marimo} python
 justify = mo.ui.dropdown(
     ["start", "center", "end", "space-between", "space-around"],
     value="space-between",
@@ -70,12 +70,12 @@ wrap = mo.ui.checkbox(label="wrap")
 mo.hstack([justify, align, gap, wrap], justify="center")
 ```
 
-```python {.marimo}
+```{marimo} python
 size = mo.ui.slider(label="box size", start=60, stop=500)
 mo.hstack([size], justify="center")
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.hstack(
     boxes,
     align=align.value,
@@ -85,7 +85,7 @@ mo.hstack(
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.vstack(
     boxes,
     align=align.value,
@@ -93,7 +93,7 @@ mo.vstack(
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 def create_box(num=1):
     box_size = size.value + num * 10
     return mo.Html(
@@ -103,7 +103,9 @@ def create_box(num=1):
 boxes = [create_box(i) for i in range(1, 5)]
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion(
     {
         "Documentation: `mo.hstack`": mo.doc(mo.hstack),
@@ -112,23 +114,25 @@ mo.accordion(
 )
 ```
 
-**Justifying `Html`.** While you can center or right-justify any object
-using `mo.hstack`, `Html` objects (returned by most marimo
-functions, and subclassed by most marimo classes) have a shortcut using
-via their `center`, `right`, and `left` methods.
+**Justifying `Html`.** While you can center or right-justify any object using
+`mo.hstack`, `Html` objects (returned by most marimo functions, and subclassed by most
+marimo classes) have a shortcut using via their `center`, `right`, and `left` methods.
+
 <!---->
 
 This markdown is left-justified.
 
-```python {.marimo}
+```{marimo} python
 mo.md("This markdown is centered.").center()
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.md("This markdown is right-justified.").right()
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion(
     {
         "Documentation: `Html.center`": mo.doc(mo.Html.center),
@@ -141,11 +145,12 @@ mo.accordion(
 ## Accordion
 
 Create expandable shelves of content using `mo.accordion`:
+
 <!---->
 
 An accordion can contain multiple items:
 
-```python {.marimo}
+```{marimo} python
 mo.accordion(
     {
         "Multiple items": "By default, only one item can be open at a time",
@@ -163,7 +168,7 @@ mo.accordion(
 
 Use `mo.ui.tabs` to display multiple objects in a single tabbed output:
 
-```python {.marimo}
+```{marimo} python
 _settings = mo.vstack(
     [
         mo.md("**Edit User**"),
@@ -188,11 +193,13 @@ mo.ui.tabs(
 )
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion({"Documentation: `mo.ui.tabs`": mo.doc(mo.ui.tabs)})
 ```
 
-```python {.marimo}
+```{marimo} python
 _t = [
     mo.md("**Hello!**"),
     mo.md(r"$f(x)$"),
@@ -211,22 +218,23 @@ mo.md(
 )
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion({"Documentation: `mo.tree`": mo.doc(mo.tree)})
 ```
 
 ## Callout
 
-Turn any markdown or HTML into an emphasized callout with the `callout`
-method:
+Turn any markdown or HTML into an emphasized callout with the `callout` method:
 
-```python {.marimo}
+```{marimo} python
 callout_kind = mo.ui.dropdown(
     ["neutral", "warn", "success", "info", "danger"], value="neutral"
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.md(
     f"""
     **This is a callout!**
@@ -238,10 +246,12 @@ mo.md(
 ).callout(kind=callout_kind.value)
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion({"Documentation: `mo.callout`": mo.doc(mo.callout)})
 ```
 
-```python {.marimo}
+```{marimo} python
 import marimo as mo
 ```

@@ -1,34 +1,41 @@
 ---
 title: SQL
-options:
-  marimo:
-    header: |
-      # Copyright 2026 Marimo. All rights reserved
-    pyproject: |
-      requires-python = ">=3.11"
-      dependencies = [
-          "marimo[sql]>=0.23.5",
-          "matplotlib",
-          "altair",
-          "plotly",
-          "pandas",
-      ]
 ---
+
+```{marimo-config}
+---
+header: |
+  # Copyright 2026 Marimo. All rights reserved
+pyproject: |
+  requires-python = ">=3.11"
+  dependencies = [
+      "marimo[sql]>=0.23.5",
+      "matplotlib",
+      "altair",
+      "plotly",
+      "pandas",
+  ]
+---
+```
 
 # Hello, SQL!
 
-_Let's dive into the world of SQL where we don't just address tables, we also join them!_
+_Let's dive into the world of SQL where we don't just address tables, we also join
+them!_
+
 <!---->
 
-With marimo, you can mix-and-match both **Python and SQL**. To create a
-SQL cell, you first need to install some additional dependencies,
-including [duckdb](https://duckdb.org/). Obtain these dependencies with
+With marimo, you can mix-and-match both **Python and SQL**. To create a SQL cell, you
+first need to install some additional dependencies, including
+[duckdb](https://duckdb.org/). Obtain these dependencies with
 
 ```bash
 pip install 'marimo[sql]'
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 has_duckdb_installed = False
 try:
     import duckdb
@@ -54,7 +61,9 @@ except ImportError:
     pass
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 if has_duckdb_installed:
     mo.output.replace(
         mo.md(
@@ -80,45 +89,50 @@ else:
 
 ## Creating SQL cells
 
-Once the required dependencies are installed, you can create SQL cells
-in one of the following ways:
+Once the required dependencies are installed, you can create SQL cells in one of the
+following ways:
 
-- right click the **Add Cell** buttons on the left of
-a cell;
+- right click the **Add Cell** buttons on the left of a cell;
 - click the **Convert to SQL** button in the cell menu
 - click the **Add SQL Cell** at the bottom of the page;
 
 ## Python representation
-marimo is still just Python, even when using SQL. Here is an example of
-how marimo embeds SQL in Python in its file format:
+
+marimo is still just Python, even when using SQL. Here is an example of how marimo
+embeds SQL in Python in its file format:
 
 ```python
 output_df = mo.sql(f"SELECT * FROM my_table LIMIT {max_rows.value}")
 ```
 
-Notice that we have an **`output_df`** variable in the cell. This is a
-resulting Polars DataFrame (if you have `polars` installed) or a Pandas
-DataFrame (if you don't). One of them must be installed in order to
-interact with the SQL result.
+Notice that we have an **`output_df`** variable in the cell. This is a resulting Polars
+DataFrame (if you have `polars` installed) or a Pandas DataFrame (if you don't). One of
+them must be installed in order to interact with the SQL result.
 
-The SQL statement itself is an formatted string (f-string), so this
-means they can contain any valid Python code, such as the values of UI
-elements. This means your SQL statement and results can be reactive! 🚀
+The SQL statement itself is an formatted string (f-string), so this means they can
+contain any valid Python code, such as the values of UI elements. This means your SQL
+statement and results can be reactive! 🚀
+
 <!---->
 
 ## Querying dataframes with SQL
+
 <!---->
 
 :::{tip} Data sources panel
 
-Click the database "barrel" icon in the left toolbar to see all dataframes and in-memory tables that your notebook has access to.
+Click the database "barrel" icon in the left toolbar to see all dataframes and in-memory
+tables that your notebook has access to.
 
 :::
+
 <!---->
 
 Let's take a look at a SQL cell. The next cell generates a dataframe called `df`.
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 _SIZE = 1000
 
 def _create_token_data(n_items=100):
@@ -159,7 +173,7 @@ else:
 
 Next, we create a SQL query, referencing the Python dataframe `df` directly.
 
-```sql {.marimo}
+```{marimo} sql
 -- This SQL cell is special since we can reference existing dataframes in the global scope as a table in the SQL query. For example, we can reference the `df` dataframe in the global scope, which was defined in another cell using Python.
 
 SELECT * FROM df;
@@ -168,18 +182,23 @@ SELECT * FROM df;
 ```
 
 ## From Python to SQL and back
+
 <!---->
 
 You can create SQL statements that depend on Python values, such as UI elements:
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 token_prefix = mo.ui.dropdown(
     list(string.ascii_lowercase), label="token prefix", value="a"
 )
 token_prefix
 ```
 
-```sql {.marimo query="result"}
+```{marimo} sql
+:query: result
+
 -- Change the dropdown to see the SQL query filter itself!
 --
 -- Here we use a duckdb function called `starts_with`:
@@ -188,10 +207,11 @@ SELECT * FROM df WHERE starts_with(token, '{token_prefix.value}')
 -- Notice that we named the output variable `result`
 ```
 
-Since we named the output variable above **`result`**,
-we can use it back in Python.
+Since we named the output variable above **`result`**, we can use it back in Python.
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 charting_library = mo.ui.radio(["matplotlib", "altair", "plotly"])
 
 mo.md(
@@ -203,7 +223,9 @@ mo.md(
 )
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 _header = mo.md(
     f"""
     We can re-use the dropdown from above: {token_prefix}
@@ -218,7 +240,9 @@ render_chart(
 ) if charting_library.value else None
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 def render_chart(charting_library, header):
     return mo.vstack(
         [header, render_charting_library(charting_library)]
@@ -258,9 +282,11 @@ def render_plotly():
 ```
 
 ## CSVs, Parquet, Postgres, and more ...
+
 <!---->
 
-We're not limited to querying dataframes. We can also query an **HTTP URL, S3 path, or a file path to a local csv or parquet file**.
+We're not limited to querying dataframes. We can also query an **HTTP URL, S3 path, or a
+file path to a local csv or parquet file**.
 
 ```sql
 -- or
@@ -271,11 +297,17 @@ SELECT * FROM read_csv('path/to/example.csv');
 SELECT * FROM read_parquet('path/to/example.parquet');
 ```
 
-With a bit of boilerplate, you can even read and write to **Postgres**, and join Postgres tables with dataframes in the same query. For a full list of supported data sources, check out the [duckdb extensions](https://duckdb.org/docs/extensions/overview) and our [example notebook on duckdb connections](https://github.com/marimo-team/marimo/blob/main/examples/sql/duckdb_connections.**py**).
+With a bit of boilerplate, you can even read and write to **Postgres**, and join
+Postgres tables with dataframes in the same query. For a full list of supported data
+sources, check out the [duckdb extensions](https://duckdb.org/docs/extensions/overview)
+and our
+[example notebook on duckdb connections](https://github.com/marimo-team/marimo/blob/main/examples/sql/duckdb_connections.**py**).
 
 For this example, we will query a dataframe loaded from a csv.
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 # We use pandas for the CSV fetch because DuckDB in Pyodide does not support HTTPFS extensions
 def read_cars_df():
     import pandas as pd
@@ -327,7 +359,9 @@ def read_cars_df():
 cars_df = read_cars_df()
 ```
 
-```sql {.marimo query="cars"}
+```{marimo} sql
+:query: cars
+
 -- Download a CSV and create an in-memory table; this is optional.
 CREATE OR replace TABLE cars as (
     SELECT * FROM cars_df
@@ -337,7 +371,9 @@ CREATE OR replace TABLE cars as (
 SELECT * from cars;
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 cylinders_dropdown = mo.ui.range_slider.from_series(
     cars["Cylinders"], debounce=True, show_value=True
 )
@@ -345,7 +381,9 @@ origin_dropdown = mo.ui.dropdown.from_series(cars["Origin"], value="Asia")
 mo.hstack([cylinders_dropdown, origin_dropdown]).left()
 ```
 
-```sql {.marimo query="filtered_cars"}
+```{marimo} sql
+:query: filtered_cars
+
 SELECT * FROM cars
 WHERE
     Cylinders >= {cylinders_dropdown.value[0]}
@@ -355,7 +393,9 @@ WHERE
     ORIGIN = '{origin_dropdown.value}'
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.hstack(
     [
         mo.stat(label="Total cars", value=str(len(filtered_cars))),
@@ -371,11 +411,15 @@ mo.hstack(
 )
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 import marimo as mo
 import random
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 import string
 ```

@@ -1,21 +1,22 @@
 ---
 title: UI
-options:
-  marimo:
-    header: |
-      # Copyright 2026 Marimo. All rights reserved
 ---
+
+```{marimo-config}
+:header: # Copyright 2026 Marimo. All rights reserved
+```
 
 # UI Elements
 
-One of marimo's most powerful features is its first-class
-support for interactive user interface (UI) elements: interacting
-with a UI element will automatically run cells that reference it.
+One of marimo's most powerful features is its first-class support for interactive user
+interface (UI) elements: interacting with a UI element will automatically run cells that
+reference it.
+
 <!---->
 
 ## marimo.ui
 
-```python {.marimo}
+```{marimo} python
 slider = mo.ui.slider(start=1, stop=10, step=1)
 slider
 
@@ -28,21 +29,22 @@ mo.md(
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.md(f"and here's its value: **{slider.value}**.")
 ```
 
 ### How interactions run cells
 
-Whenever you interact with a UI element, its value is sent back to
-Python. When this happens, all cells that reference the global variable
-bound to the UI element, but don't define it, will run.
+Whenever you interact with a UI element, its value is sent back to Python. When this
+happens, all cells that reference the global variable bound to the UI element, but don't
+define it, will run.
 
-This simple rule lets you use UI elements to
-drive the execution of your program, letting you build
-interactive notebooks and tools for yourselves and others.
+This simple rule lets you use UI elements to drive the execution of your program,
+letting you build interactive notebooks and tools for yourselves and others.
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.accordion(
     {
         "Tip: assign UI elements to global variables": (
@@ -70,11 +72,16 @@ mo.accordion(
 ```
 
 ### Simple elements
+
 <!---->
 
-marimo has a [large library of simple UI elements](https://docs.marimo.io/api/inputs/index.html). Here are a just few examples:
+marimo has a
+[large library of simple UI elements](https://docs.marimo.io/api/inputs/index.html).
+Here are a just few examples:
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.md(
     """
     See our [examples folder](https://github.com/marimo-team/marimo/tree/main/examples/ui) on GitHub for bite-sized notebooks showcasing all our UI elements. For
@@ -83,83 +90,83 @@ mo.md(
 ).callout()
 ```
 
-```python {.marimo}
+```{marimo} python
 number = mo.ui.number(start=1, stop=10, step=1)
 number
 ```
 
-```python {.marimo}
+```{marimo} python
 number.value
 ```
 
-```python {.marimo}
+```{marimo} python
 checkbox = mo.ui.checkbox(label="checkbox")
 checkbox
 ```
 
-```python {.marimo}
+```{marimo} python
 checkbox.value
 ```
 
-```python {.marimo}
+```{marimo} python
 text = mo.ui.text(placeholder="type some text ...")
 text
 ```
 
-```python {.marimo}
+```{marimo} python
 text.value
 ```
 
-```python {.marimo}
+```{marimo} python
 text_area = mo.ui.text_area(placeholder="type some text ...")
 text_area
 ```
 
-```python {.marimo}
+```{marimo} python
 text_area.value
 ```
 
-```python {.marimo}
+```{marimo} python
 dropdown = mo.ui.dropdown(["a", "b", "c"])
 dropdown
 ```
 
-```python {.marimo}
+```{marimo} python
 dropdown.value
 ```
 
-```python {.marimo}
+```{marimo} python
 run_button = mo.ui.run_button(label="click me")
 run_button
 ```
 
-```python {.marimo}
+```{marimo} python
 "Run button was clicked!" if run_button.value else "Click the run button!"
 ```
 
-```python {.marimo}
+```{marimo} python
 file_upload = mo.ui.file(kind="area")
 file_upload
 ```
 
-```python {.marimo}
+```{marimo} python
 file_upload.value
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.md(f"To see more examples, use this dropdown: {basic_ui_elements}")
 ```
 
-```python {.marimo}
+```{marimo} python
 selected_element = construct_element(basic_ui_elements.value)
 show_element(selected_element)
 ```
 
-```python {.marimo}
+```{marimo} python
 value(selected_element)
 ```
 
-```python {.marimo}
+```{marimo} python
 documentation(basic_ui_elements.value)
 ```
 
@@ -171,26 +178,28 @@ documentation(basic_ui_elements.value)
     Use these powerful elements to logically group together related elements,
     create a dynamic set of UI elements, or reduce the number of global
     variables in your program.
+
 <!---->
 
-This first example shows how to create an array of UI elements using `mo.ui.array`.
-When you interact with an element in the array, all cells that reference the
-array are reactively run. If you instead used a regular Python list, cells referring to the list would _not_ be run.
+This first example shows how to create an array of UI elements using `mo.ui.array`. When
+you interact with an element in the array, all cells that reference the array are
+reactively run. If you instead used a regular Python list, cells referring to the list
+would _not_ be run.
 
-```python {.marimo}
+```{marimo} python
 array = mo.ui.array(
     [mo.ui.text(), mo.ui.slider(start=1, stop=10), mo.ui.date()]
 )
 array
 ```
 
-```python {.marimo}
+```{marimo} python
 array.value
 ```
 
 marimo also comes with `mo.ui.dictionary`, which is analogous to `mo.ui.array`
 
-```python {.marimo}
+```{marimo} python
 dictionary = mo.ui.dictionary(
     {
         "text": mo.ui.text(),
@@ -201,43 +210,45 @@ dictionary = mo.ui.dictionary(
 dictionary
 ```
 
-```python {.marimo}
+```{marimo} python
 dictionary.value
 ```
 
-```python {.marimo hide_code="true"}
+```{marimo} python
+:hide-code: true
+
 mo.md(
     f"To see additional composite elements, use this dropdown: {composite_elements}"
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 composite_element = construct_element(composite_elements.value)
 show_element(composite_element)
 ```
 
-```python {.marimo}
+```{marimo} python
 value(composite_element)
 ```
 
-```python {.marimo}
+```{marimo} python
 documentation(composite_elements.value)
 ```
 
 ### Building custom elements
 
-marimo supports third-party UI elements through anywidget — this lets you build
-your own interactive UI elements, or use widgets built by others in the
-community. To learn more, [see our
-docs](https://docs.marimo.io/guides/integrating_with_marimo/custom_ui_plugins.html).
+marimo supports third-party UI elements through anywidget — this lets you build your own
+interactive UI elements, or use widgets built by others in the community. To learn more,
+[see our docs](https://docs.marimo.io/guides/integrating_with_marimo/custom_ui_plugins.html).
+
 <!---->
 
 ## Appendix
-The remaining cells are helper data structures and functions.
-You can look at their code if you're curious how certain parts of this
-tutorial were implemented.
 
-```python {.marimo}
+The remaining cells are helper data structures and functions. You can look at their code
+if you're curious how certain parts of this tutorial were implemented.
+
+```{marimo} python
 composite_elements = mo.ui.dropdown(
     options=dict(
         sorted(
@@ -253,7 +264,7 @@ composite_elements = mo.ui.dropdown(
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 basic_ui_elements = mo.ui.dropdown(
     options=dict(
         sorted(
@@ -279,7 +290,7 @@ basic_ui_elements = mo.ui.dropdown(
 )
 ```
 
-```python {.marimo}
+```{marimo} python
 def construct_element(value):
     if value == mo.ui.array:
         return mo.ui.array(
@@ -360,13 +371,13 @@ def construct_element(value):
     return None
 ```
 
-```python {.marimo}
+```{marimo} python
 def show_element(element):
     if element is not None:
         return mo.hstack([element], justify="center")
 ```
 
-```python {.marimo}
+```{marimo} python
 def value(element):
     if element is not None:
         v = (
@@ -381,7 +392,7 @@ def value(element):
         )
 ```
 
-```python {.marimo}
+```{marimo} python
 def documentation(element):
     if element is not None:
         return mo.accordion(
@@ -393,6 +404,6 @@ def documentation(element):
         )
 ```
 
-```python {.marimo}
+```{marimo} python
 import marimo as mo
 ```

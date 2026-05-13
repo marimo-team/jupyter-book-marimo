@@ -1,17 +1,19 @@
 ---
 title: Fileformat
-options:
-  marimo:
-    header: |
-      # Copyright 2026 Marimo. All rights reserved
 ---
 
-```python {.marimo name="setup"}
+```{marimo-config}
+:header: # Copyright 2026 Marimo. All rights reserved
+```
+
+```{marimo} python
+:name: setup
+
 import dataclasses
 import random
 ```
 
-```python {.marimo}
+```{marimo} python
 import marimo as mo
 ```
 
@@ -24,8 +26,9 @@ These files are:
 - 🤖 legible for both humans and machines
 - ✏️ formattable using your tool of choice
 - ➕ easily versioned with git, producing small diffs
-- 🐍 usable as Python  scripts, with UI  elements taking their default values
+- 🐍 usable as Python scripts, with UI elements taking their default values
 - 🧩 modular, exposing functions and classes that can be imported from the notebook
+
 <!---->
 
 ## Example
@@ -33,30 +36,34 @@ These files are:
 Consider a marimo notebook with the following four cells.
 
 First cell:
+
 ```python3
 print(text.value)
 ```
 
 Second cell:
+
 ```python3
 def say_hello(name="World"):
     return f"Hello, {name}!"
 ```
 
 Third cell:
+
 ```python3
 text = mo.ui.text(value=say_hello())
 text
 ```
 
 Fourth cell:
+
 ```python3
 import marimo as mo
 ```
+
 <!---->
 
-For the above example, marimo would generate the following file
-contents:
+For the above example, marimo would generate the following file contents:
 
 ```python3
 import marimo
@@ -88,24 +95,28 @@ if __name__ == "__main__":
     app.run()
 ```
 
-As you can see, this is _pure Python_. This is part of the reason why
-marimo's generated files are **git-friendly**: small changes made using
-the marimo editor result in small changes to the file that marimo
-generates.
+As you can see, this is _pure Python_. This is part of the reason why marimo's generated
+files are **git-friendly**: small changes made using the marimo editor result in small
+changes to the file that marimo generates.
 
-Moreover, the cell defining a single pure function `say_hello` was saved "top-level" in the notebook file, making it possible for you to import it into other Python files or notebooks.
+Moreover, the cell defining a single pure function `say_hello` was saved "top-level" in
+the notebook file, making it possible for you to import it into other Python files or
+notebooks.
+
 <!---->
 
 ## Properties
 
-marimo's file format was designed to be easy to read and easy
-to work with, while also serving the needs of the marimo library. You can
-even edit the generated file's cells directly, using your favorite text
-editor, and format the file with your favorite code formatter.
+marimo's file format was designed to be easy to read and easy to work with, while also
+serving the needs of the marimo library. You can even edit the generated file's cells
+directly, using your favorite text editor, and format the file with your favorite code
+formatter.
 
 We explain some properties of marimo's file format below.
 
-````python {.marimo hide_code="true"}
+````{marimo} python
+:hide-code: true
+
 mo.accordion(
     {
         "Cells are functions": """
@@ -215,42 +226,49 @@ mo.accordion(
 
 ## Importing functions and classes from notebooks
 
-The details of marimo's file format are important if you want to import
-functions and classes defined in your notebook into other Python modules. If you
-don't intend to do so, you can skip this section.
+The details of marimo's file format are important if you want to import functions and
+classes defined in your notebook into other Python modules. If you don't intend to do
+so, you can skip this section.
+
 <!---->
 
 ### Declaring imports used by functions and classes
 
-marimo can serialize functions and classes into the top-level of a file, so you can import them with regular Python syntax:
+marimo can serialize functions and classes into the top-level of a file, so you can
+import them with regular Python syntax:
 
 ```python
 from my_notebook import my_function
 ```
 
-In particular, if a cell defines just a single function or class, and if that function or class is pure
-save for references to variables defined in a special **setup cell**, it will be serialized top-level.
+In particular, if a cell defines just a single function or class, and if that function
+or class is pure save for references to variables defined in a special **setup cell**,
+it will be serialized top-level.
 
 **Setup cell.** Notebooks can optionally include a setup cell that imports modules,
 written in the file as:
 
 <!-- note this setup cell is hardcoded in the playground example -->
+
 ```python
 with app.setup:
     import marimo as mo
     import dataclasses
 ```
 
-Modules imported in a setup cell can be used in "top-level" functions or
-classes. You can add the setup cell from the general menu of the editor under:
-Add setup cell.
+Modules imported in a setup cell can be used in "top-level" functions or classes. You
+can add the setup cell from the general menu of the editor under: Add setup cell.
+
 <!---->
 
 ### Functions and classes
 
-Notebook files expose functions and classes that depend only on variables defined in the setup cell (or on other such functions or classes). For example, the following cell:
+Notebook files expose functions and classes that depend only on variables defined in the
+setup cell (or on other such functions or classes). For example, the following cell:
 
-```python {.marimo name="*roll_die"}
+```{marimo} python
+:name: *roll_die
+
 def roll_die():
     """
     A reusable function.
@@ -278,11 +296,14 @@ Making it importable as
 ```python
 from my_notebook import roll_die
 ```
+
 <!---->
 
 Standalone classes are also exposed:
 
-```python {.marimo name="*SimulationExample"}
+```{marimo} python
+:name: *SimulationExample
+
 @dataclasses.dataclass
 class SimulationExample:
     n_rolls: int
@@ -302,21 +323,25 @@ class SimulationExample:
     def simulate(self) -> list[int]:
         return [roll_die() for _ in range(self.n_rolls)]
 ```
+
 <!---->
 
 :::{warning} Heads up
 
-Not all standalone functions will be exposed in the module. If your function depends on variables that are defined in other cells, then it won't be exposed top-level.
+Not all standalone functions will be exposed in the module. If your function depends on
+variables that are defined in other cells, then it won't be exposed top-level.
 
 :::
 
 For example, this function will not be exposed:
 
-```python {.marimo}
+```{marimo} python
 variable = 123
 ```
 
-```python {.marimo name="wrapped_function_example"}
+```{marimo} python
+:name: wrapped_function_example
+
 def not_a_top_level_function():
     """
     This function depends on a variable declared in another cell.
@@ -331,28 +356,30 @@ def not_a_top_level_function():
 
 ### I want to edit notebooks in a different editor, what do I need to know?
 
-See the docs on [using your own editor](https://docs.marimo.io/guides/editor_features/watching/).
+See the docs on
+[using your own editor](https://docs.marimo.io/guides/editor_features/watching/).
 
 ### I want to import functions from a marimo notebook, what do I need to know?
 
-See the docs on [reusable functions and
-classes](https://links.marimo.app/reusable-functions).
+See the docs on
+[reusable functions and classes](https://links.marimo.app/reusable-functions).
 
 ### I want to run pytest on marimo notebooks, what do I need to know?
 
 See the docs on [testing](https://docs.marimo.io/guides/testing/).
+
 <!---->
 
 ## This notebook's source code
 
 The source code of this notebook is shown below:
 
-```python {.marimo}
+```{marimo} python
 with open(__file__, "r", encoding="utf-8") as f:
     contents = f.read()
 ```
 
-```python {.marimo}
+```{marimo} python
 mo.ui.code_editor(
     value=contents,
     language="python",

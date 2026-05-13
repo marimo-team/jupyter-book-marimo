@@ -1,7 +1,8 @@
 # marimo + jupyter-book = 🌴 📖 ❤️
 
 `jupyter-book-marimo` is a Jupyter Book executable plugin that renders
-marimo-marked Python, SQL, and Markdown fences as hydrated marimo islands.
+MyST-native marimo directives for Python, SQL, and Markdown as hydrated marimo
+islands.
 
 Use it when you want normal MyST pages with reactive marimo cells embedded
 inside the Jupyter Book site.
@@ -35,17 +36,17 @@ project:
 Use the path that matches your environment. In this repo's docs site, the docs
 live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`.
 
-**3.** Author marimo cells as ordinary MyST language fences.
+**3.** Author marimo cells as MyST directives.
 
 ````markdown
-```python {.marimo}
+```{marimo} python
 import marimo as mo
 
 slider = mo.ui.slider(start=1, stop=10, label="count")
 slider
 ```
 
-```python {.marimo}
+```{marimo} python
 "*" * slider.value
 ```
 ````
@@ -60,52 +61,68 @@ jupyter-book build --html
 
 The plugin keeps the authoring surface close to MyST:
 
-| Feature             | How                                                        |
-| ------------------- | ---------------------------------------------------------- |
-| Python cells        | ` ```python {.marimo} `                                    |
-| SQL cells           | ` ```sql {.marimo query="result"} `                        |
-| Markdown cells      | ` ```markdown {.marimo} `                                  |
-| Show code/editor    | `editor="true"`                                            |
-| Show source         | `echo="true"`                                              |
-| Hide source         | `hide_code="true"`                                         |
-| Hide output         | `hide_output="true"` or `output="false"`                   |
-| Skip execution      | `eval="false"`                                             |
-| Fail on cell errors | `error="false"`                                            |
-| Disable execution   | `disabled="true"`                                          |
-| Mark bad syntax     | `unparseable="true"` or the accepted alias `unparsable`    |
-| Omit rendered cell  | `include="false"`                                          |
-| SQL result name     | `query="result"`                                           |
-| SQL engine object   | `engine="engine"`                                          |
+| Feature             | How                              |
+| ------------------- | -------------------------------- |
+| Python cells        | `` ```{marimo} python ``         |
+| SQL cells           | `` ```{marimo} sql ``            |
+| Markdown cells      | `` ```{marimo} markdown ``       |
+| Show code/editor    | `:editor: true`                  |
+| Show source         | `:echo: true`                    |
+| Hide source         | `:hide-code: true`               |
+| Hide output         | `:hide-output: true`             |
+| Skip execution      | `:eval: false`                   |
+| Fail on cell errors | `:error: false`                  |
+| Disable execution   | `:disabled: true`                |
+| Mark bad syntax     | `:unparseable: true`             |
+| Omit rendered cell  | `:include: false`                |
+| SQL result name     | `:query: result`                 |
+| SQL engine object   | `:engine: engine`                |
 
 Cells render output only by default.
-The parser also accepts `warning` for Quarto-style option compatibility.
+Use one spelling for each option; multiword options use kebab case.
 
 The same execution options can be set as page defaults under
-`options.marimo` frontmatter. Cell attributes override page defaults.
+`{marimo-config}`. Cell directive options override page defaults.
 
 ## Page Metadata
 
-Add `options.marimo.pyproject` frontmatter to declare page-local dependencies.
+Add a `{marimo-config}` directive to declare page-local dependencies.
 The plugin converts this metadata into `uv run` arguments using marimo's
-sandbox logic. Add `options.marimo.header` when a page needs Python inserted
-before the exported notebook code.
+sandbox logic. Add `header` when a page needs Python inserted before the
+exported notebook code.
 
-```yaml
+````markdown
+```{marimo-config}
 ---
-options:
-  marimo:
-    header: |
-      import marimo as mo
-    pyproject: |
-      requires-python = ">=3.10"
-      dependencies = [
-          "pandas",
-          "marimo>=0.23.5",
-      ]
+header: |
+  import marimo as mo
+pyproject: |
+  requires-python = ">=3.10"
+  dependencies = [
+      "pandas",
+      "marimo>=0.23.5",
+  ]
 ---
 ```
+````
 
-Pages without `options.marimo.pyproject` execute in-process.
+Pages without `pyproject` execute in-process. Use `external-env: true` to
+make in-process execution explicit; `external-env` and `pyproject` are mutually
+exclusive.
+
+Cell options use the same directive option syntax:
+
+````markdown
+```{marimo} sql
+:query: result
+:hide-output: true
+
+SELECT * FROM table
+```
+````
+
+Old `.marimo` fence classes and `options.marimo` frontmatter are not parsed by
+this API.
 
 ## Styling
 
@@ -173,8 +190,9 @@ BASE_URL=/projects/marimo/jupyter-book-marimo/docs make book-build
 During a book build, the plugin writes
 `docs/.jupyter-book-marimo/container-widget.mjs`. That directory is generated
 output: it gives Jupyter Book a same-origin ESM file for the anywidget bridge,
-while the source of truth stays in
-`src/jupyter_book_marimo/assets/container-widget.mjs`.
+while the maintained source stays in the top-level `widget/` Deno project. The
+packaged `src/jupyter_book_marimo/assets/container-widget.mjs` file is a
+checked-in Deno bundle generated from that TypeScript source.
 
 For Jupyter Book build, hosting, and publishing details outside this plugin's
 integration surface, use the official Jupyter Book docs:
@@ -189,6 +207,7 @@ reactivity, layouts, SQL, Markdown, and page-local dependencies.
 ```bash
 make check       # format check, lint, typecheck, tests, build
 make test        # tests only
+make widget-build # rebuild packaged container-widget.mjs from TypeScript
 make book-build  # strict static HTML Jupyter Book build
 ```
 
