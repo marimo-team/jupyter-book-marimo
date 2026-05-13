@@ -25,7 +25,7 @@ def test_default_execution_option_vocabulary_matches_quarto_marimo() -> None:
 def test_cell_execution_options_override_document_options() -> None:
     config = resolved_execution_options(
         {"eval": False, "echo": True},
-        {"eval": True, "hide-code": True},
+        {"eval": True, "hide_code": True},
     )
 
     assert config["eval"] is True
@@ -47,7 +47,6 @@ def test_disabled_and_unparseable_skip_execution() -> None:
     assert (
         should_execute(resolved_execution_options({}, {"unparseable": True})) is False
     )
-    assert should_execute(resolved_execution_options({}, {"unparsable": True})) is False
 
 
 def test_echo_and_editor_are_visible_code_requests() -> None:

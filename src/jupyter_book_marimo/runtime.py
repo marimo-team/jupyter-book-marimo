@@ -1,7 +1,8 @@
 """Choose where marimo extraction runs for a transformed page.
 
-Most pages run in-process; pages with ``options.marimo.pyproject`` run through
-``uv`` so their dependencies stay local to the page authoring contract.
+Most pages run in-process; pages with ``marimo-config`` ``:pyproject:`` metadata
+run through ``uv`` so their dependencies stay local to the page authoring
+contract.
 """
 
 from __future__ import annotations

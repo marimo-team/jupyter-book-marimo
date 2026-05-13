@@ -1,15 +1,14 @@
-"""Translate MyST code nodes into anywidget-backed marimo islands.
+"""Translate MyST marimo directives into anywidget-backed islands.
 
-The plugin owns document-tree concerns: finding source context, invoking the
-runtime extractor once per page, copying the bridge asset, and replacing code
-nodes with widget nodes.
+The plugin owns document-tree concerns: validating executable directive output,
+invoking the runtime extractor once per page, copying the bridge asset, and
+replacing marimo nodes with widget nodes.
 """
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from functools import lru_cache
 import hashlib
 from importlib.resources import files
 import json
@@ -17,46 +16,89 @@ import os
 from pathlib import Path
 from shutil import copyfileobj
 import sys
-from typing import Any, NamedTuple
+from typing import Any
 
 from .authoring import (
     Cell,
-    CellOptions,
-    SourcePage,
-    code_cell_from_node,
-    normalize_language,
-    source_fences,
-    source_page,
+    MARIMO_CELL_NODE,
+    MARIMO_CONFIG_NODE,
+    cell_from_directive,
+    cell_from_node,
+    config_from_directive,
 )
 from .runtime import run_extractor
 
-TRANSFORM_NAME = "marimo-code-fences"
+TRANSFORM_NAME = "marimo-islands"
+MARIMO_DIRECTIVE = "marimo"
+MARIMO_CONFIG_DIRECTIVE = "marimo-config"
 STYLESHEETS_ENV = "JUPYTER_BOOK_MARIMO_STYLESHEETS"
 WIDGET_CLASS = "marimo-jupyter-book-widget"
 CONTAINER_WIDGET = "container-widget.mjs"
 GENERATED_DIR = ".jupyter-book-marimo"
 
+BOOLEAN_OPTION = {"type": "boolean"}
+STRING_OPTION = {"type": "string"}
+NUMBER_OPTION = {"type": "number"}
+
 PLUGIN_SPEC = {
     "name": "Jupyter Book marimo",
-    "directives": [],
+    "directives": [
+        {
+            "name": MARIMO_DIRECTIVE,
+            "doc": "Execute a marimo cell.",
+            "arg": {
+                "type": "string",
+                "required": True,
+                "doc": "Cell language: python, sql, or markdown.",
+            },
+            "options": {
+                "eval": BOOLEAN_OPTION,
+                "echo": BOOLEAN_OPTION,
+                "output": BOOLEAN_OPTION,
+                "warning": BOOLEAN_OPTION,
+                "error": BOOLEAN_OPTION,
+                "include": BOOLEAN_OPTION,
+                "editor": BOOLEAN_OPTION,
+                "query": STRING_OPTION,
+                "engine": STRING_OPTION,
+                "hide-code": BOOLEAN_OPTION,
+                "hide-output": BOOLEAN_OPTION,
+                "disabled": BOOLEAN_OPTION,
+                "unparseable": BOOLEAN_OPTION,
+                "name": STRING_OPTION,
+                "column": NUMBER_OPTION,
+            },
+            "body": {
+                "type": "string",
+                "required": True,
+                "doc": "Cell source code.",
+            },
+        },
+        {
+            "name": MARIMO_CONFIG_DIRECTIVE,
+            "doc": "Configure marimo execution for the current page.",
+            "options": {
+                "eval": BOOLEAN_OPTION,
+                "echo": BOOLEAN_OPTION,
+                "output": BOOLEAN_OPTION,
+                "warning": BOOLEAN_OPTION,
+                "error": BOOLEAN_OPTION,
+                "include": BOOLEAN_OPTION,
+                "editor": BOOLEAN_OPTION,
+                "external-env": BOOLEAN_OPTION,
+                "header": STRING_OPTION,
+                "pyproject": STRING_OPTION,
+            },
+        },
+    ],
     "transforms": [
         {
             "name": TRANSFORM_NAME,
-            "doc": "Replace Python, SQL, and Markdown code fences marked with .marimo.",
+            "doc": "Replace marimo directive nodes with hydrated anywidgets.",
             "stage": "document",
         }
     ],
 }
-
-CodeSignature = tuple[int, str, str]
-
-
-class SourceContext(NamedTuple):
-    """Source metadata and raw fence options matched to the MyST tree."""
-
-    metadata: dict[str, Any]
-    options_by_signature: dict[CodeSignature, CellOptions]
-    path: Path | None
 
 
 @dataclass(frozen=True)
@@ -70,6 +112,7 @@ class CollectedDocument:
     metadata: dict[str, Any]
     source_path: Path | None
     indexed_cells: list[CollectedCell]
+    config_node_ids: set[int]
 
     @property
     def cells(self) -> list[Cell]:
@@ -104,115 +147,39 @@ def source_files(root: Path) -> list[Path]:
     ]
 
 
-@lru_cache(maxsize=16)
-def parsed_source_pages(root: Path) -> tuple[SourcePage, ...]:
-    pages: list[SourcePage] = []
-    for path in source_files(root):
+def source_path_for_cells(
+    cells: list[Cell],
+    *,
+    root: Path | None = None,
+) -> Path | None:
+    """Find the current source page without parsing cell options/config.
+
+    MyST executable transforms do not currently pass a clean source filename to
+    Python plugins. The extractor still benefits from the path for stable app
+    IDs and relative file access, so this locator scores source files by the
+    directive bodies that MyST already parsed for us.
+    """
+    if not cells:
+        return None
+
+    best_paths: list[Path] = []
+    best_score = 0
+    for path in source_files((root or Path.cwd()).resolve()):
         try:
             source = path.read_text(encoding="utf-8")
         except OSError:
             continue
-        pages.append(SourcePage(metadata={}, fences=source_fences(source), path=path))
-    return tuple(pages)
+        score = sum(1 for cell in cells if cell.code and cell.code in source)
+        if score > best_score:
+            best_paths = [path]
+            best_score = score
+        elif score == best_score and score > 0:
+            best_paths.append(path)
 
-
-def code_signature(node: dict[str, Any]) -> CodeSignature | None:
-    if node.get("type") != "code":
-        return None
-    start = ((node.get("position") or {}).get("start") or {}).get("line")
-    if not isinstance(start, int):
-        return None
-    return (
-        start,
-        normalize_language(str(node.get("lang") or "")),
-        str(node.get("value") or ""),
-    )
-
-
-def code_signatures(tree: dict[str, Any]) -> set[CodeSignature]:
-    signatures: set[CodeSignature] = set()
-
-    def visit(node: dict[str, Any]) -> None:
-        signature = code_signature(node)
-        if signature is not None:
-            signatures.add(signature)
-        for child in node.get("children") or []:
-            if isinstance(child, dict):
-                visit(child)
-
-    visit(tree)
-    return signatures
-
-
-def source_page_context(
-    tree: dict[str, Any] | None = None,
-    *,
-    root: Path | None = None,
-    pages: tuple[SourcePage, ...] | None = None,
-) -> SourceContext:
-    """Recover raw Markdown context for the current parsed MyST tree.
-
-    MyST drops some fence attributes, so the plugin scans Markdown files and
-    joins raw fences back to parsed code nodes by `(line, language, code)`.
-    If more than one page matches the same tree, the build fails instead of
-    guessing which frontmatter and fence options apply.
-    """
-    signatures = code_signatures(tree) if tree is not None else None
-    best_pages: list[SourcePage] = []
-    best_score = 0
-
-    lookup: dict[CodeSignature, CellOptions] = {}
-    source_pages = (
-        pages
-        if pages is not None
-        else parsed_source_pages((root or Path.cwd()).resolve())
-    )
-    for page in source_pages:
-        if signatures is not None:
-            score = sum(
-                (fence.start_line, fence.language, fence.code) in signatures
-                for fence in page.fences
-            )
-            if score > best_score:
-                best_pages = [page]
-                best_score = score
-            elif score == best_score and score > 0:
-                best_pages.append(page)
-            continue
-        for fence in page.fences:
-            lookup[(fence.start_line, fence.language, fence.code)] = fence.options
-    if signatures is not None:
-        if len(best_pages) > 1:
-            paths = ", ".join(str(page.path) for page in best_pages)
-            raise ValueError(
-                f"Ambiguous marimo source page; matched multiple candidates: {paths}"
-            )
-        best = best_pages[0] if best_pages else None
-        for fence in best.fences if best is not None else ():
-            lookup[(fence.start_line, fence.language, fence.code)] = fence.options
-        metadata: dict[str, Any] = best.metadata if best is not None else {}
-        if best is not None and best.path is not None:
-            source = best.path.read_text(encoding="utf-8")
-            metadata = source_page(source, path=best.path).metadata
-        return SourceContext(
-            metadata,
-            lookup,
-            (best.path if best is not None else None),
-        )
-    return SourceContext({}, lookup, None)
-
-
-def source_options_for_node(
-    node: dict[str, Any], lookup: dict[CodeSignature, CellOptions]
-) -> CellOptions | None:
-    if node.get("type") != "code":
-        return None
-    start = ((node.get("position") or {}).get("start") or {}).get("line")
-    if not isinstance(start, int):
-        return None
-    language = normalize_language(str(node.get("lang") or ""))
-    code = str(node.get("value") or "")
-    return lookup.get((start, language, code))
+    if len(best_paths) > 1:
+        paths = ", ".join(str(path) for path in best_paths)
+        raise ValueError(f"Ambiguous marimo source page; matched: {paths}")
+    return best_paths[0] if best_paths else None
 
 
 def synthetic_filename(cells: list[Cell]) -> str:
@@ -335,15 +302,10 @@ def output_node(
     custom_stylesheets: list[str] | None = None,
     custom_style_blocks: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Return an anywidget node or a visible fallback for missing output."""
+    """Return an anywidget node for one extractor output."""
     if not isinstance(output, dict) or not isinstance(output.get("html"), str):
         digest = hashlib.sha1(source.encode("utf-8")).hexdigest()[:8]
-        return {
-            "type": "code",
-            "lang": "text",
-            "value": f"Missing marimo output {index} ({digest})",
-            "position": position,
-        }
+        raise RuntimeError(f"Missing marimo output {index} ({digest})")
 
     model = dict(output)
     if custom_stylesheets:
@@ -362,14 +324,18 @@ def output_node(
 def collect_document(
     tree: dict[str, Any],
 ) -> CollectedDocument:
-    context = source_page_context(tree)
     cells: list[CollectedCell] = []
+    config: dict[str, Any] = {}
+    config_node_ids: set[int] = set()
 
     def visit(node: dict[str, Any]) -> None:
-        cell = code_cell_from_node(
-            node,
-            source_options_for_node(node, context.options_by_signature),
-        )
+        if node.get("type") == MARIMO_CONFIG_NODE:
+            if config_node_ids:
+                raise ValueError("Only one marimo-config directive is allowed per page")
+            config.update(dict(node.get("options") or {}))
+            config_node_ids.add(id(node))
+
+        cell = cell_from_node(node)
         if cell is not None:
             cells.append(CollectedCell(id(node), cell))
 
@@ -378,11 +344,16 @@ def collect_document(
                 visit(child)
 
     visit(tree)
-    return CollectedDocument(context.metadata, context.path, cells)
+    return CollectedDocument(
+        config,
+        source_path_for_cells([item.cell for item in cells]),
+        cells,
+        config_node_ids,
+    )
 
 
 def replace_nodes(
-    node: dict[str, Any], replacements: dict[int, dict[str, Any]]
+    node: dict[str, Any], replacements: dict[int, dict[str, Any] | None]
 ) -> None:
     children = node.get("children")
     if not isinstance(children, list):
@@ -391,7 +362,9 @@ def replace_nodes(
     new_children: list[Any] = []
     for child in children:
         if isinstance(child, dict) and id(child) in replacements:
-            new_children.append(replacements[id(child)])
+            replacement = replacements[id(child)]
+            if replacement is not None:
+                new_children.append(replacement)
             continue
         if isinstance(child, dict):
             replace_nodes(child, replacements)
@@ -406,25 +379,30 @@ def transform_document(
 ) -> dict[str, Any]:
     document = collect_document(tree)
     if not document.cells:
-        replace_nodes(tree, {})
+        replace_nodes(tree, {node_id: None for node_id in document.config_node_ids})
         return tree
 
     page = run_extractor(document.payload())
     outputs = page.get("outputs") if isinstance(page, dict) else []
+    if not isinstance(outputs, list) or len(outputs) != len(document.indexed_cells):
+        raise RuntimeError(
+            "marimo extractor returned "
+            f"{len(outputs) if isinstance(outputs, list) else 'no'} outputs for "
+            f"{len(document.indexed_cells)} cells"
+        )
     custom_stylesheets, custom_style_blocks = custom_style_assets(stylesheets)
-    replacements = {
-        item.node_id: output_node(
-            outputs[index]
-            if isinstance(outputs, list) and index < len(outputs)
-            else None,
+    replacements: dict[int, dict[str, Any] | None] = {
+        node_id: None for node_id in document.config_node_ids
+    }
+    for index, item in enumerate(document.indexed_cells):
+        replacements[item.node_id] = output_node(
+            outputs[index],
             index,
             item.cell.code,
             item.cell.position,
             custom_stylesheets,
             custom_style_blocks,
         )
-        for index, item in enumerate(document.indexed_cells)
-    }
     replace_nodes(tree, replacements)
     return tree
 
@@ -437,6 +415,31 @@ def declare_result(content: Any) -> None:
 
 def configured_stylesheets(styles: list[str]) -> tuple[str, ...]:
     return (*stylesheets_from_env(), *tuple(styles))
+
+
+def directive_nodes(name: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+    if name == MARIMO_DIRECTIVE:
+        cell = cell_from_directive(data)
+        return [
+            {
+                "type": MARIMO_CELL_NODE,
+                "language": cell.options["language"],
+                "value": cell.code,
+                "options": cell.options,
+                "position": cell.position,
+            }
+        ]
+    if name == MARIMO_CONFIG_DIRECTIVE:
+        return [
+            {
+                "type": MARIMO_CONFIG_NODE,
+                "options": config_from_directive(data),
+                "position": (data.get("node") or {}).get("position")
+                if isinstance(data.get("node"), dict)
+                else None,
+            }
+        ]
+    raise ValueError(f"Unknown directive: {name}")
 
 
 def main() -> None:
@@ -457,7 +460,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.directive:
-        raise NotImplementedError(args.directive)
+        declare_result(directive_nodes(args.directive, json.load(sys.stdin)))
     if args.transform:
         if args.transform != TRANSFORM_NAME:
             raise ValueError(f"Unknown transform: {args.transform}")

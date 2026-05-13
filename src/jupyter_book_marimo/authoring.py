@@ -1,23 +1,18 @@
-"""Parse marimo-flavoured MyST authoring into executable cell models.
-
-This module owns source syntax only: YAML frontmatter, fence attributes, and
-execution-option normalization. It deliberately does not execute code or mutate
-the MyST document tree.
-"""
+"""Validate MyST-native marimo directives into executable cell models."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
-import yaml
-
 ExecutionOptions = dict[str, Any]
+CellOptions = dict[str, Any]
 
-CellOptions = dict[str, str | int | float | bool | None]
+MARIMO_CELL_NODE = "marimoCell"
+MARIMO_CONFIG_NODE = "marimoConfig"
+
+SUPPORTED_LANGUAGES = {"python", "sql", "markdown"}
 
 DEFAULT_EXECUTION_OPTIONS: ExecutionOptions = {
     "eval": True,
@@ -29,13 +24,36 @@ DEFAULT_EXECUTION_OPTIONS: ExecutionOptions = {
     "editor": False,
 }
 
-PAGE_EXECUTION_OPTION_KEYS = (
-    *DEFAULT_EXECUTION_OPTIONS.keys(),
-    "hide_code",
-    "hide_output",
+CANONICAL_OPTION_KEYS = {
+    "eval",
+    "echo",
+    "output",
+    "warning",
+    "error",
+    "include",
+    "editor",
+    "query",
+    "engine",
+    "hide-code",
+    "hide-output",
     "disabled",
     "unparseable",
-    "unparsable",
+    "name",
+    "column",
+}
+
+CONFIG_OPTION_KEYS = {
+    *DEFAULT_EXECUTION_OPTIONS,
+    "external-env",
+    "header",
+    "pyproject",
+}
+
+SQL_ONLY_OPTION_KEYS = {"query", "engine"}
+CONFLICTING_OPTION_KEYS = (
+    ("echo", "hide-code"),
+    ("output", "hide-output"),
+    ("eval", "disabled"),
 )
 
 
@@ -54,6 +72,10 @@ def pyproject_to_script_metadata(pyproject: str) -> str:
     return "\n".join(commented_lines) + "\n"
 
 
+def internal_key(key: str) -> str:
+    return key.replace("-", "_")
+
+
 def as_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
@@ -65,8 +87,8 @@ def as_bool(value: Any, default: bool = False) -> bool:
 
 
 def normalized_options(options: dict[str, Any]) -> ExecutionOptions:
-    """Use Python-friendly option keys even when authors write dash-case."""
-    return {key.replace("-", "_"): value for key, value in options.items()}
+    """Normalize canonical MyST option spelling at the plugin boundary."""
+    return {internal_key(key): value for key, value in options.items()}
 
 
 def resolved_execution_options(
@@ -81,16 +103,11 @@ def resolved_execution_options(
     }
 
 
-def is_unparseable(config: ExecutionOptions) -> bool:
-    """Accept both spellings because authoring tools and examples vary."""
-    return as_bool(config.get("unparseable")) or as_bool(config.get("unparsable"))
-
-
 def should_execute(config: ExecutionOptions) -> bool:
     return (
         as_bool(config.get("eval"), True)
         and not as_bool(config.get("disabled"))
-        and not is_unparseable(config)
+        and not as_bool(config.get("unparseable"))
     )
 
 
@@ -101,9 +118,6 @@ def should_include(config: ExecutionOptions) -> bool:
 def should_display_code(config: ExecutionOptions) -> bool:
     if not should_include(config) or as_bool(config.get("hide_code")):
         return False
-    # marimo currently exposes one island flag for visible code. `echo` is the
-    # Quarto execution option; `editor` is retained as a display-code request
-    # until marimo exposes a separate browser editor affordance for islands.
     return as_bool(config.get("echo")) or as_bool(config.get("editor"))
 
 
@@ -136,271 +150,88 @@ class Cell:
         }
 
 
-@dataclass
-class SourceFence:
-    """A raw Markdown fence kept so parser-lost attributes can be recovered."""
-
-    start_line: int
-    language: str
-    code: str
-    options: CellOptions
-
-
-@dataclass
-class SourcePage:
-    metadata: dict[str, Any]
-    fences: list[SourceFence]
-    path: Path | None = None
-
-
-FRONTMATTER_PATTERN = re.compile(
-    r"\A---[ \t]*\r?\n(?P<body>.*?)(?:\r?\n)---[ \t]*(?:\r?\n|\Z)",
-    re.DOTALL,
-)
-
-
-def _unquote(value: str) -> str:
-    """Undo simple quoted MyST attribute values without a full shell parser."""
-    if len(value) < 2:
-        return value
-    quote = value[0]
-    if quote not in {"'", '"'} or value[-1] != quote:
-        return value
-    return value[1:-1].replace(f"\\{quote}", quote).replace("\\\\", "\\")
-
-
-def parse_scalar(value: Any) -> str | int | float | bool | None:
-    """Coerce attribute/frontmatter scalars into the types execution expects."""
-    if value is None:
-        return None
-    if isinstance(value, bool | int | float):
-        return value
-    text = _unquote(str(value).strip())
-    lower = text.lower()
-    if lower == "true":
-        return True
-    if lower == "false":
-        return False
-    if lower == "null":
-        return None
-    if re.fullmatch(r"-?\d+", text):
-        return int(text)
-    if re.fullmatch(r"-?\d+\.\d+", text):
-        return float(text)
-    return text
-
-
-def tokenize_info(value: str) -> list[str]:
-    """Split fence info text while preserving quoted attribute values."""
-    return [
-        match.group(0)
-        for match in re.finditer(r'"([^"\\]|\\.)*"|\'([^\'\\]|\\.)*\'|\S+', value)
-    ]
-
-
-def normalize_language(language: str) -> str:
-    """Collapse authoring aliases to the languages the extractor supports."""
-    normalized = language.strip().lower()
-    if normalized in {"py", "python3", "marimo"}:
-        return "python"
-    if normalized == "md":
-        return "markdown"
-    return normalized
-
-
-def parse_attribute_tokens(tokens: list[str]) -> tuple[bool, CellOptions]:
-    options: CellOptions = {}
-    is_marimo = False
-
-    for token in tokens:
-        if token == ".marimo":
-            is_marimo = True
-            continue
-        if token.startswith(".") or token.startswith("#"):
-            continue
-        if "=" not in token:
-            options[token] = True
-            continue
-        key, value = token.split("=", 1)
-        options[key] = parse_scalar(value)
-
-    return is_marimo, options
-
-
-def parse_code_meta(language: str, meta: str | None) -> CellOptions | None:
-    """Parse MyST AST language/meta fields when attributes survived parsing."""
-    language = normalize_language(language)
-    if language not in {"python", "sql", "markdown"}:
-        return None
-    if not meta:
-        return None
-
-    text = meta.strip()
-    if not (text.startswith("{") and text.endswith("}")):
-        return None
-    is_marimo, options = parse_attribute_tokens(tokenize_info(text[1:-1].strip()))
-    if not is_marimo:
-        return None
-    options.pop("language", None)
-    return {"language": language, **options}
-
-
-def parse_braced_fence_info(info: str) -> CellOptions | None:
-    text = info.strip()
-    if not (text.startswith("{") and text.endswith("}")):
-        return None
-    tokens = tokenize_info(text[1:-1].strip())
-    if not tokens:
-        return None
-
-    first, rest = tokens[0], tokens[1:]
-    if first.endswith(".marimo"):
-        language = first.removesuffix(".marimo")
-        return parse_code_meta(language, "{" + " ".join([".marimo", *rest]) + "}")
-    if first in {"python", "py", "python3", "sql", "markdown", "md", "marimo"}:
-        return parse_code_meta(first, "{" + " ".join(rest) + "}")
-    return None
-
-
-def parse_plain_fence_info(info: str) -> CellOptions | None:
-    if braced := parse_braced_fence_info(info):
-        return braced
-    match = re.fullmatch(r"(?P<language>\S+)\s+(?P<meta>\{.*\})", info.strip())
-    if match is None:
-        return None
-    return parse_code_meta(match["language"], match["meta"])
-
-
-def source_fences(source: str) -> list[SourceFence]:
-    """Scan raw Markdown so options lost by MyST parsing can be recovered."""
-    fences: list[SourceFence] = []
-    lines = source.splitlines()
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        match = re.match(
-            r"^(?P<indent>[ \t]{0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$",
-            line,
-        )
-        if match is None:
-            index += 1
-            continue
-
-        fence = match["fence"]
-        info = match["info"].strip()
-        close_index = index + 1
-        while close_index < len(lines):
-            if re.match(
-                rf"^[ \t]{{0,3}}{re.escape(fence[0])}{{{len(fence)},}}\s*$",
-                lines[close_index],
-            ):
-                break
-            close_index += 1
-        if close_index >= len(lines):
-            break
-
-        options = parse_plain_fence_info(info)
-        if options is not None:
-            body_lines = strip_fence_body_indent(
-                lines[index + 1 : close_index],
-                match["indent"],
-            )
-            fences.append(
-                SourceFence(
-                    # MyST code-node positions point at the opening fence line;
-                    # keep the same 1-based line so raw fences can be joined
-                    # back to parsed code nodes later.
-                    start_line=index + 1,
-                    language=str(options["language"]),
-                    code="\n".join(body_lines),
-                    options=options,
-                )
-            )
-        index = close_index + 1
-    return fences
-
-
-def strip_fence_body_indent(lines: list[str], opening_indent: str) -> list[str]:
-    """Mirror CommonMark's removal of the opening fence indentation."""
-    max_spaces = opening_indent.count(" ")
-    if max_spaces == 0:
-        return lines
-
-    stripped: list[str] = []
-    for line in lines:
-        spaces = len(line) - len(line.lstrip(" "))
-        stripped.append(line[min(spaces, max_spaces) :])
-    return stripped
-
-
-def read_frontmatter(source: str) -> dict[str, Any]:
-    match = FRONTMATTER_PATTERN.match(source)
-    if match is None:
-        return {}
-    parsed = yaml.safe_load(match["body"]) or {}
-    if not isinstance(parsed, dict):
-        raise ValueError("YAML frontmatter must be a mapping")
-    return parsed
-
-
-def _frontmatter_string(value: Any, key: str) -> str | None:
-    """Normalize multiline marimo frontmatter strings without trailing noise."""
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError(f"frontmatter.options.marimo.{key} must be a string")
-    return dedent(value).rstrip()
-
-
-def metadata_from_frontmatter(frontmatter: dict[str, Any]) -> dict[str, Any]:
-    """Extract only the `options.marimo` namespace owned by this plugin."""
-    options = frontmatter.get("options")
-    if options is None:
-        return {}
+def _directive_options(data: dict[str, Any]) -> dict[str, Any]:
+    options = data.get("options") or {}
     if not isinstance(options, dict):
-        raise ValueError("frontmatter.options must be a mapping")
-
-    marimo = options.get("marimo")
-    if marimo is None:
-        return {}
-    if not isinstance(marimo, dict):
-        raise ValueError("frontmatter.options.marimo must be a mapping")
-
-    metadata: dict[str, Any] = {}
-    for key in ("header", "pyproject"):
-        value = _frontmatter_string(marimo.get(key), key)
-        if value is not None:
-            metadata[key] = value
-    for key in PAGE_EXECUTION_OPTION_KEYS:
-        if key in marimo:
-            value = parse_scalar(marimo[key])
-            if value is not None:
-                metadata[key] = value
-    return metadata
+        raise ValueError("Directive options must be a mapping")
+    return options
 
 
-def source_page(source: str, path: Path | None = None) -> SourcePage:
-    return SourcePage(
-        metadata=metadata_from_frontmatter(read_frontmatter(source)),
-        fences=source_fences(source),
-        path=path,
+def _position(data: dict[str, Any]) -> dict[str, Any] | None:
+    node = data.get("node")
+    if not isinstance(node, dict):
+        return None
+    position = node.get("position")
+    return position if isinstance(position, dict) else None
+
+
+def _reject_unknown_options(
+    options: dict[str, Any],
+    allowed: set[str],
+    *,
+    directive: str,
+) -> None:
+    unknown = sorted(set(options) - allowed)
+    if unknown:
+        formatted = ", ".join(unknown)
+        raise ValueError(f"Unsupported {directive} option(s): {formatted}")
+
+
+def _reject_conflicts(options: dict[str, Any]) -> None:
+    for first, second in CONFLICTING_OPTION_KEYS:
+        if as_bool(options.get(first)) and as_bool(options.get(second)):
+            raise ValueError(f"Conflicting marimo options: {first} and {second}")
+
+
+def _normalize_cell_options(options: dict[str, Any], language: str) -> CellOptions:
+    _reject_unknown_options(options, CANONICAL_OPTION_KEYS, directive="marimo")
+    _reject_conflicts(options)
+    if language != "sql":
+        illegal_sql = sorted(SQL_ONLY_OPTION_KEYS & set(options))
+        if illegal_sql:
+            formatted = ", ".join(illegal_sql)
+            raise ValueError(
+                f"SQL-only marimo option(s) on {language} cell: {formatted}"
+            )
+    return {"language": language, **normalized_options(options)}
+
+
+def cell_from_directive(data: dict[str, Any]) -> Cell:
+    """Convert parsed MyST directive data into an executable marimo cell."""
+    language = str(data.get("arg") or "").strip().lower()
+    if language not in SUPPORTED_LANGUAGES:
+        supported = ", ".join(sorted(SUPPORTED_LANGUAGES))
+        raise ValueError(
+            f"Unsupported marimo language: {language!r}; expected {supported}"
+        )
+
+    options = _normalize_cell_options(_directive_options(data), language)
+    return Cell(
+        code=str(data.get("body") or ""),
+        options=options,
+        position=_position(data),
     )
 
 
-def code_cell_from_node(
-    node: dict[str, Any], source_options: CellOptions | None = None
-) -> Cell | None:
-    """Turn a MyST code node into a cell, falling back to raw source options."""
-    if node.get("type") != "code":
-        return None
-    options = parse_code_meta(str(node.get("lang") or ""), node.get("meta"))
-    if options is None:
-        options = source_options
-    if options is None:
+def config_from_directive(data: dict[str, Any]) -> dict[str, Any]:
+    """Convert parsed MyST directive data into page-level marimo config."""
+    options = _directive_options(data)
+    _reject_unknown_options(options, CONFIG_OPTION_KEYS, directive="marimo-config")
+    _reject_conflicts(options)
+    if (
+        as_bool(options.get("external-env"))
+        and str(options.get("pyproject") or "").strip()
+    ):
+        raise ValueError("marimo-config cannot combine external-env and pyproject")
+    return normalized_options(options)
+
+
+def cell_from_node(node: dict[str, Any]) -> Cell | None:
+    if node.get("type") != MARIMO_CELL_NODE:
         return None
     return Cell(
         code=str(node.get("value") or ""),
-        options=options,
+        options=dict(node.get("options") or {}),
         position=node.get("position")
         if isinstance(node.get("position"), dict)
         else None,

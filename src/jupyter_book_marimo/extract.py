@@ -24,6 +24,7 @@ from typing import Any
 
 import marimo
 from marimo import MarimoIslandGenerator
+from marimo._ast.cell import CellConfig
 from marimo._ast.cell_manager import CellManager
 from marimo._convert.common.format import markdown_to_marimo, sql_to_marimo
 from marimo._session.notebook import AppFileManager
@@ -32,7 +33,6 @@ from marimo._session.notebook.storage import FilesystemStorage
 from .authoring import (
     ExecutionOptions,
     as_bool,
-    is_unparseable,
     normalized_options,
     resolved_execution_options,
     should_display_code,
@@ -121,6 +121,17 @@ def sql_query_target(query: Any) -> str:
     return DEFAULT_SQL_QUERY_TARGET
 
 
+def as_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def sql_code_to_python(
     code: str,
     query: Any,
@@ -141,9 +152,9 @@ def source_for_cell(cell: dict[str, Any]) -> str:
             code,
             options.get("query"),
             as_bool(options.get("hide_output")),
-            options.get("engine"),
+            str(options["engine"]) if options.get("engine") else None,
         )
-    if language in {"markdown", "md"}:
+    if language == "markdown":
         return markdown_to_marimo(code)
     return code
 
@@ -213,6 +224,9 @@ class CellPlan:
     execute: bool
     disabled: bool
     unparseable: bool
+    hide_code: bool
+    column: int | None
+    name: str | None
 
     @classmethod
     def from_payload(
@@ -237,7 +251,10 @@ class CellPlan:
             display_output=should_display_output(config),
             execute=should_execute(config),
             disabled=as_bool(config.get("disabled")),
-            unparseable=is_unparseable(config),
+            unparseable=as_bool(config.get("unparseable")),
+            hide_code=as_bool(config.get("hide_code")),
+            column=as_int(config.get("column")),
+            name=str(config["name"]) if config.get("name") else None,
         )
 
     @property
@@ -413,6 +430,32 @@ def render_assets(generator: MarimoIslandGenerator) -> dict[str, Any]:
     }
 
 
+def apply_cell_metadata(
+    generator: MarimoIslandGenerator,
+    stub: Any,
+    plan: CellPlan,
+) -> None:
+    """Persist directive cell metadata into marimo's notebook model."""
+    manager = generator._app.cell_manager
+    cell_id = stub._cell_id
+    cell = manager._compiled_cells.get(cell_id)
+    notebook_cell = manager.document.get_cell(cell_id)
+
+    config = CellConfig(
+        column=plan.column,
+        disabled=plan.disabled,
+        hide_code=plan.hide_code,
+    )
+    notebook_cell.config = config
+    if cell is not None:
+        cell._cell.configure(config)
+
+    if plan.name:
+        notebook_cell.name = plan.name
+        if cell is not None:
+            cell._name = plan.name
+
+
 async def build_generator(generator: MarimoIslandGenerator, filename: str) -> bool:
     from marimo._server.export import run_app_until_completion
 
@@ -477,6 +520,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             outputs.append(plan.compile_error_output())
             continue
 
+        apply_cell_metadata(generator, stub, plan)
         outputs.append(None)
         pending_outputs.append(PendingCellOutput(plan, stub))
 
