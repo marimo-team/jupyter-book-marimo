@@ -79,7 +79,10 @@ jobs:
           from importlib.resources import files
 
           asset = files("jupyter_book_marimo.assets").joinpath("container-widget.mjs")
-          assert "const containerWidget" in asset.read_text()
+          source = asset.read_text()
+          assert "widget/container-widget.ts" in source
+          assert "marimo-jupyter-book-pending" in source
+          assert "export {" in source
           PY
 
   book-build:
