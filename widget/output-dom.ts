@@ -3,6 +3,7 @@ import {
   nestedRuntimeContainerSelector,
   outputClass,
   pendingClass,
+  pendingStatusClass,
   previewClass,
   runtimeElementSelector,
 } from "./styles.ts";
@@ -57,6 +58,8 @@ const containsMarimoUiElement = (node: Element): boolean => {
     .some((value) => value.includes("marimo-ui-element"));
 };
 
+const displayRuntimeSelector = "marimo-table, marimo-json-output, marimo-mime-renderer";
+
 const isDisplayCodeEditor = (node: Element): boolean => {
   return node.matches("marimo-ui-element") &&
     Boolean(node.querySelector("marimo-code-editor"));
@@ -88,11 +91,53 @@ const hasDeferredRuntimeAncestor = (node: Element): boolean => {
   );
 };
 
-const canUsePendingPreview = (node: Element): boolean => {
-  if (node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
-    return false;
+const staticTextWithoutRuntimeElements = (node: Element): string => {
+  const clone = node.cloneNode(true);
+  if (!(clone instanceof Element)) return "";
+  clone
+    .querySelectorAll(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)
+    .forEach((child) => child.remove());
+  return clone.textContent.trim();
+};
+
+const hasDisplayRuntimeElement = (node: Element): boolean => {
+  if (node.matches(displayRuntimeSelector)) return true;
+  return Boolean(node.querySelector(displayRuntimeSelector));
+};
+
+const hasOnlyDisplayRuntimeElements = (node: Element): boolean => {
+  const runtimeElements = Array.from(node.querySelectorAll(runtimeElementSelector));
+  if (node.matches(runtimeElementSelector)) {
+    runtimeElements.unshift(node);
   }
-  return !node.querySelector(runtimeElementSelector);
+  return runtimeElements.length > 0 &&
+    runtimeElements.every((element) =>
+      element.matches(displayRuntimeSelector) ||
+      Boolean(element.querySelector(displayRuntimeSelector))
+    );
+};
+
+const canUsePendingPreview = (node: Element): boolean => {
+  /*
+   * Keep useful server-rendered output visible while browser hydration catches
+   * up. Pure inputs and anywidgets still use the skeleton, because their stale
+   * server DOM is not meaningful until marimo recreates it.
+   */
+  if (node.matches("marimo-anywidget")) return false;
+  if (!node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
+    return !node.querySelector(runtimeElementSelector);
+  }
+  if (staticTextWithoutRuntimeElements(node)) return true;
+  if (hasOnlyDisplayRuntimeElements(node)) return true;
+  return hasDisplayRuntimeElement(node) && !node.matches("marimo-ui-element");
+};
+
+const pendingStatusNode = (): HTMLElement => {
+  const node = document.createElement("div");
+  node.className = pendingStatusClass;
+  node.setAttribute("role", "status");
+  node.textContent = "Preparing live output";
+  return node;
 };
 
 const replaceWithPendingPreview = (node: Element): HTMLElement => {
@@ -110,7 +155,7 @@ const replaceWithPendingPreview = (node: Element): HTMLElement => {
     const preview = document.createElement("div");
     preview.className = previewClass;
 
-    wrapper.append(preview, loadingNode());
+    wrapper.append(preview, pendingStatusNode(), loadingNode());
     node.replaceWith(wrapper);
     preview.append(node);
   } else {

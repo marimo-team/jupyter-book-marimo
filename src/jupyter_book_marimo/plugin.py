@@ -55,7 +55,6 @@ PLUGIN_SPEC = {
                 "eval": BOOLEAN_OPTION,
                 "echo": BOOLEAN_OPTION,
                 "output": BOOLEAN_OPTION,
-                "warning": BOOLEAN_OPTION,
                 "error": BOOLEAN_OPTION,
                 "include": BOOLEAN_OPTION,
                 "editor": BOOLEAN_OPTION,
@@ -81,7 +80,6 @@ PLUGIN_SPEC = {
                 "eval": BOOLEAN_OPTION,
                 "echo": BOOLEAN_OPTION,
                 "output": BOOLEAN_OPTION,
-                "warning": BOOLEAN_OPTION,
                 "error": BOOLEAN_OPTION,
                 "include": BOOLEAN_OPTION,
                 "editor": BOOLEAN_OPTION,
@@ -177,8 +175,7 @@ def source_path_for_cells(
             best_paths.append(path)
 
     if len(best_paths) > 1:
-        paths = ", ".join(str(path) for path in best_paths)
-        raise ValueError(f"Ambiguous marimo source page; matched: {paths}")
+        return None
     return best_paths[0] if best_paths else None
 
 

@@ -6,7 +6,7 @@
     "widget:fmt-check": "deno fmt --check deno.json widget",
     "widget:lint": "deno lint widget",
     "widget:check": "deno check widget/container-widget.ts",
-    "widget:bundle": "deno bundle --quiet --platform browser --format esm widget/container-widget.ts -o src/jupyter_book_marimo/assets/container-widget.mjs"
+    "widget:bundle": "python scripts/bundle_widget.py"
   },
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "es2022"],

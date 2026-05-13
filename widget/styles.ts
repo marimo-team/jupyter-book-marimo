@@ -2,6 +2,7 @@ export const outputClass = "marimo-jupyter-book-output";
 export const loadingClass = "marimo-jupyter-book-loading";
 export const pendingClass = "marimo-jupyter-book-pending";
 export const previewClass = "marimo-jupyter-book-preview";
+export const pendingStatusClass = "marimo-jupyter-book-pending-status";
 
 export const runtimeElementSelector =
   "marimo-anywidget, marimo-ui-element, marimo-mime-renderer, " +
@@ -43,6 +44,8 @@ export const globalThemeCss = `
   --jbm-inline-code-fg: var(--jbm-foreground);
   --jbm-pending-bg: color-mix(in srgb, var(--jbm-surface) 78%, transparent);
   --jbm-pending-border: var(--jbm-border);
+  --jbm-pending-status-bg: color-mix(in srgb, var(--jbm-background) 86%, transparent);
+  --jbm-pending-status-fg: var(--jbm-muted-foreground);
   --jbm-skeleton-bg: color-mix(in srgb, var(--jbm-surface) 86%, transparent);
   --jbm-skeleton-line: color-mix(in srgb, var(--jbm-foreground) 14%, transparent);
   --jbm-skeleton-line-strong: color-mix(in srgb, var(--jbm-foreground) 24%, transparent);
@@ -119,8 +122,34 @@ export const globalThemeCss = `
 }
 
 .${pendingClass}:not([data-has-preview="true"]) > .${previewClass},
+.${pendingClass}:not([data-has-preview="true"]) > .${pendingStatusClass},
 .${pendingClass}[data-has-preview="true"] > .${loadingClass} {
   display: none;
+}
+
+.${pendingStatusClass} {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--jbm-pending-border);
+  border-radius: 999px;
+  background: var(--jbm-pending-status-bg);
+  color: var(--jbm-pending-status-fg);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  font-weight: 500;
+}
+
+.${pendingStatusClass}::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.7;
 }
 
 .${loadingClass} {

@@ -61,6 +61,11 @@ def test_marimo_directive_rejects_unknown_option() -> None:
         cell_from_directive(directive(options={"hide_code": True}))
 
 
+def test_marimo_directive_rejects_unimplemented_warning_option() -> None:
+    with pytest.raises(ValueError, match="Unsupported marimo option"):
+        cell_from_directive(directive(options={"warning": False}))
+
+
 def test_marimo_directive_rejects_sql_options_on_python() -> None:
     with pytest.raises(ValueError, match="SQL-only"):
         cell_from_directive(directive("python", options={"query": "rows"}))

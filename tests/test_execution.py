@@ -10,12 +10,11 @@ from jupyter_book_marimo.authoring import (
 )
 
 
-def test_default_execution_option_vocabulary_matches_quarto_marimo() -> None:
+def test_default_execution_option_vocabulary_is_implemented_public_api() -> None:
     assert tuple(DEFAULT_EXECUTION_OPTIONS) == (
         "eval",
         "echo",
         "output",
-        "warning",
         "error",
         "include",
         "editor",

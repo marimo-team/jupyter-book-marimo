@@ -6,21 +6,21 @@ WIDGET_BUNDLE := src/jupyter_book_marimo/assets/container-widget.mjs
 .PHONY: format format-check lint typecheck docs-format docs-format-check widget-format widget-format-check widget-lint widget-typecheck widget-build widget-build-check test check build book-build book-start clean
 
 format:
-	uv run ruff format src tests
+	uv run ruff format src tests scripts
 	uv run deno task docs:fmt
 	uv run deno task widget:fmt
 
 format-check:
-	uv run ruff format --check src tests
+	uv run ruff format --check src tests scripts
 	uv run deno task docs:fmt-check
 	uv run deno task widget:fmt-check
 
 lint:
-	uv run ruff check src tests
+	uv run ruff check src tests scripts
 	uv run deno task widget:lint
 
 typecheck:
-	uv run ty check src
+	uv run ty check src scripts
 	uv run deno task widget:check
 
 docs-format:
@@ -42,11 +42,11 @@ widget-typecheck:
 	uv run deno task widget:check
 
 widget-build:
-	uv run deno task widget:bundle
+	uv run python scripts/bundle_widget.py
 
 widget-build-check:
 	@tmp=$$(mktemp); \
-	uv run deno bundle --quiet --platform browser --format esm $(WIDGET_ENTRY) -o "$$tmp"; \
+	uv run python scripts/bundle_widget.py "$$tmp"; \
 	if ! cmp -s "$$tmp" "$(WIDGET_BUNDLE)"; then \
 		echo "$(WIDGET_BUNDLE) is out of date; run make widget-build"; \
 		rm -f "$$tmp"; \
