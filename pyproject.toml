@@ -19,8 +19,12 @@ jupyter-book-marimo = "jupyter_book_marimo:main"
 requires = ["uv_build>=0.11.10,<0.12.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+source-include = ["deno.json", "widget/**"]
+
 [dependency-groups]
 dev = [
+    "deno>=2.7.14",
     "jupyter-book>=2.1.5",
     "pytest>=9.0.3",
     "ruff>=0.15.12",

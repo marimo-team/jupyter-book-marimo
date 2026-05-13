@@ -299,6 +299,19 @@ wheels = [
 ]
 
 [[package]]
+name = "deno"
+version = "2.7.14"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/e4/adbeb37143551a4e575049e8b291bedc5f57191753ade31f7cf6665b1d52/deno-2.7.14.tar.gz", hash = "sha256:63a79caa105368813e434593f2c059d4cc3e2562ec57f606348e9321a525d582", size = 8168, upload-time = "2026-04-28T17:34:10.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c8/a1/82951e37de914ca9445e3dd99a5f06e36e857000f9d34beb3f9fc5ff0971/deno-2.7.14-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:3860efe76d9c8491ee847256f31ff5f1b1d1871137daab91eb4f28c0543eeb4d", size = 47841490, upload-time = "2026-04-28T17:33:53.968Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/1f/809cac7474d86ad41f2938b4713cf846b261bba7a1fdb5ab27b3fabc435e/deno-2.7.14-py3-none-macosx_11_0_arm64.whl", hash = "sha256:194560abc29021d3b5b4be9bfd628f2b21152a3bae031bdcd30e41584ba4b9d8", size = 44600497, upload-time = "2026-04-28T17:33:57.426Z" },
+    { url = "https://files.pythonhosted.org/packages/52/51/c60816c902e5fa9daf4bab5869a5895e58748f05739eab399c1ae6d0ee37/deno-2.7.14-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:f47511d0c8080c2bdb0ee58f2b96d657b1e5f2ede088b1bb9a98bfb80362af22", size = 48267415, upload-time = "2026-04-28T17:34:00.553Z" },
+    { url = "https://files.pythonhosted.org/packages/79/a8/ea52407ebe29caadc67b6899437898880aad8d207ed889dd4f9ba7d9ddf7/deno-2.7.14-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:0a92040900311849a812d47e29e1494b1a4f4c7431536721888356c7a3662d22", size = 50283833, upload-time = "2026-04-28T17:34:04.094Z" },
+    { url = "https://files.pythonhosted.org/packages/98/0e/2581a39773004081f40ef4811059fe867953d86166b3f7fb77abb5d68757/deno-2.7.14-py3-none-win_amd64.whl", hash = "sha256:1646dbcd447465bc6eb9a9e25eef0283f74dd68ad5bd9c50bcaec641737eb730", size = 49278963, upload-time = "2026-04-28T17:34:07.671Z" },
+]
+
+[[package]]
 name = "docutils"
 version = "0.22.4"
 source = { registry = "https://pypi.org/simple" }
@@ -312,7 +325,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -583,6 +596,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "deno" },
     { name = "jupyter-book" },
     { name = "pytest" },
     { name = "ruff" },
@@ -597,6 +611,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "deno", specifier = ">=2.7.14" },
     { name = "jupyter-book", specifier = ">=2.1.5" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "ruff", specifier = ">=0.15.12" },

@@ -1,52 +1,269 @@
-/**
- * anywidget container for exported marimo islands.
- *
- * MyST renders anywidgets inside a shadow root. marimo islands expect normal
- * light DOM, a hidden notebook source node, and a same-origin bridge asset.
- * This adapter keeps that boundary explicit.
- *
- * The Python plugin copies this file into the generated .jupyter-book-marimo/
- * directory during a book build. That copy is the served ESM asset; this
- * packaged file is the source of truth.
- */
+// widget/model.ts
+var parseHtml = (html) => {
+  const template = document.createElement("template");
+  template.innerHTML = typeof html === "string" ? html : "";
+  return template.content;
+};
+var stringHash = (value) => {
+  let hash = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = hash * 33 ^ value.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(36);
+};
+var decodeMarimoCode = (fragment) => {
+  const node = fragment.querySelector("marimo-code");
+  const encoded = node?.textContent?.trim();
+  if (!encoded) return "";
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
+  }
+};
+var appIdFrom = (fragment, notebookCode) => {
+  const island = fragment.querySelector("marimo-island[data-app-id]");
+  if (island) return island.getAttribute("data-app-id") ?? "";
+  return notebookCode ? `marimo-${stringHash(notebookCode)}` : "";
+};
+var hasModelGetter = (model) => {
+  return typeof model?.get === "function";
+};
+var getModelValue = (model, key, fallback = "") => {
+  if (hasModelGetter(model)) {
+    const value2 = model.get(key);
+    return value2 == null ? fallback : value2;
+  }
+  const value = model?.[key];
+  return value == null ? fallback : value;
+};
+var getModelString = (model, key) => {
+  const value = getModelValue(model, key);
+  return typeof value === "string" ? value : "";
+};
+var getModelStringList = (model, key) => {
+  const value = getModelValue(model, key, []);
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string");
+  }
+  return typeof value === "string" ? [
+    value
+  ] : [];
+};
+var getModelStyleBlocks = (model) => {
+  const value = getModelValue(model, "customStyleBlocks", []);
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => {
+    return Boolean(item && typeof item === "object" && typeof item.id === "string" && typeof item.css === "string");
+  }).map((item) => ({
+    id: item.id,
+    css: item.css
+  }));
+};
+var attributesFromElement = (element) => {
+  return Object.fromEntries(Array.from(element.attributes, (attribute) => [
+    attribute.name,
+    attribute.value
+  ]));
+};
+var linksFromFragment = (fragment) => {
+  return Array.from(fragment.querySelectorAll("link[href]"), attributesFromElement);
+};
+var modulesFromFragment = (fragment) => {
+  return Array.from(fragment.querySelectorAll('script[type="module"][src]'), (script) => script.getAttribute("src")).filter((src) => typeof src === "string" && src.length > 0);
+};
+var validLinkList = (value) => {
+  return Array.isArray(value) && value.every((item) => item && typeof item === "object");
+};
+var validModuleScriptList = (value) => {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+};
+var assetsFromModel = (model, head) => {
+  const assets = getModelValue(model, "assets", {});
+  const record = assets && typeof assets === "object" ? assets : {};
+  return {
+    links: validLinkList(record.links) ? record.links : linksFromFragment(head),
+    moduleScripts: validModuleScriptList(record.moduleScripts) ? record.moduleScripts : modulesFromFragment(head)
+  };
+};
+var readOutputModel = (model) => {
+  const head = parseHtml(getModelValue(model, "head"));
+  const body = parseHtml(getModelValue(model, "html"));
+  const notebookCode = getModelString(model, "notebookCode") || decodeMarimoCode(head) || decodeMarimoCode(body);
+  return {
+    body,
+    notebookCode,
+    appId: getModelString(model, "appId") || appIdFrom(body, notebookCode),
+    assets: assetsFromModel(model, head),
+    customStylesheets: getModelStringList(model, "customStylesheets"),
+    customStyleBlocks: getModelStyleBlocks(model),
+    suppressMimetypes: getModelStringList(model, "suppressMimetypes")
+  };
+};
+var hasRuntimePayload = (output) => {
+  return Boolean(output.notebookCode || output.assets.moduleScripts.length > 0 || output.assets.links.length > 0);
+};
+var isOutputBodyEmpty = (output) => {
+  return output.body.childNodes.length === 0;
+};
 
-const outputClass = "marimo-jupyter-book-output";
-const loadingClass = "marimo-jupyter-book-loading";
-const pendingClass = "marimo-jupyter-book-pending";
-const previewClass = "marimo-jupyter-book-preview";
-const runtimeElementSelector =
-  "marimo-anywidget, marimo-ui-element, marimo-mime-renderer, " +
-  "marimo-json-output, marimo-table";
-const nestedRuntimeContainerSelector =
-  "marimo-accordion, marimo-tabs, marimo-carousel";
-const themeStyleId = "marimo-jupyter-book-theme";
-const shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
-const customStyleAttribute = "data-jupyter-book-marimo-custom-style";
+// widget/runtime.ts
+var loadedModules = /* @__PURE__ */ new Map();
+var notebookCodeNodes = /* @__PURE__ */ new Map();
+var appRecords = /* @__PURE__ */ new Map();
+var installExportContext = (notebookCode) => {
+  if (!notebookCode) return;
+  Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
+    value: Object.freeze({
+      trusted: true,
+      notebookCode
+    }),
+    writable: false,
+    configurable: true
+  });
+};
+var releaseNotebookCode = (appId) => {
+  const record = notebookCodeNodes.get(appId);
+  if (!record) return;
+  record.uses -= 1;
+  if (record.uses > 0) return;
+  record.node.remove();
+  notebookCodeNodes.delete(appId);
+};
+var retainNotebookCode = (appId, notebookCode) => {
+  if (!appId || !notebookCode) return () => {
+  };
+  const existing = notebookCodeNodes.get(appId);
+  if (existing) {
+    existing.uses += 1;
+    return () => releaseNotebookCode(appId);
+  }
+  const node = document.createElement("marimo-code");
+  node.hidden = true;
+  node.dataset.appId = appId;
+  node.dataset.jupyterBookMarimo = "true";
+  node.textContent = encodeURIComponent(notebookCode);
+  document.body.appendChild(node);
+  notebookCodeNodes.set(appId, {
+    node,
+    uses: 1
+  });
+  return () => releaseNotebookCode(appId);
+};
+var ensureLinks = (links) => {
+  for (const attrs of links) {
+    if (!attrs.href) continue;
+    const href = new URL(attrs.href, document.baseURI).href;
+    const rel = attrs.rel ?? "";
+    const existing = Array.from(document.head.querySelectorAll("link[href]")).find((link2) => link2 instanceof HTMLLinkElement && link2.href === href && (link2.getAttribute("rel") || "") === rel);
+    if (existing) continue;
+    const link = document.createElement("link");
+    for (const [key, value] of Object.entries(attrs)) {
+      link.setAttribute(key, value);
+    }
+    link.href = href;
+    document.head.appendChild(link);
+  }
+};
+var ensureModule = (src) => {
+  const href = new URL(src, document.baseURI).href;
+  const existing = loadedModules.get(href);
+  if (existing) return existing;
+  const promise = import(href).then(() => void 0, () => {
+    throw new Error(`Failed to load marimo runtime: ${href}`);
+  });
+  loadedModules.set(href, promise);
+  return promise;
+};
+var appRecord = (appId) => {
+  const existing = appRecords.get(appId);
+  if (existing) return existing;
+  let resolveReady = () => {
+  };
+  let rejectReady = () => {
+  };
+  const promise = new Promise((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  const record = {
+    ready: false,
+    started: false,
+    uses: 0,
+    promise,
+    resolve: resolveReady,
+    reject: rejectReady
+  };
+  appRecords.set(appId, record);
+  return record;
+};
+var releaseApp = (appId) => {
+  const record = appRecords.get(appId);
+  if (!record) return;
+  record.uses -= 1;
+  if (record.uses > 0) return;
+  appRecords.delete(appId);
+};
+var retainApp = (appId, notebookCode, assets) => {
+  if (!appId) return () => {
+  };
+  const record = appRecord(appId);
+  record.uses += 1;
+  if (!record.started) {
+    record.started = true;
+    installExportContext(notebookCode);
+    ensureLinks(assets.links);
+    Promise.all(assets.moduleScripts.map(ensureModule)).then(() => {
+      record.ready = true;
+      record.resolve();
+    }, (error) => {
+      record.reject(error);
+      appRecords.delete(appId);
+    });
+  }
+  return () => releaseApp(appId);
+};
+var documentNavigationStarted = false;
+var closestAnchor = (target) => {
+  if (!(target instanceof Element)) return null;
+  const anchor = target.closest("a[href]");
+  return anchor instanceof HTMLAnchorElement ? anchor : null;
+};
+var shouldUseDocumentNavigation = (event, anchor) => {
+  if (event.defaultPrevented || event.button !== 0) return false;
+  if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
+    return false;
+  }
+  if (anchor.target && anchor.target !== "_self") return false;
+  if (anchor.hasAttribute("download")) return false;
+  const url = new URL(anchor.href, document.baseURI);
+  if (url.origin !== globalThis.location.origin) return false;
+  return url.pathname !== globalThis.location.pathname || url.search !== globalThis.location.search;
+};
+var ensureDocumentNavigation = () => {
+  if (documentNavigationStarted) return;
+  documentNavigationStarted = true;
+  document.addEventListener("click", (event) => {
+    if (!(event instanceof MouseEvent)) return;
+    const anchor = closestAnchor(event.target);
+    if (!anchor) return;
+    if (!shouldUseDocumentNavigation(event, anchor)) return;
+    event.preventDefault();
+    globalThis.location.assign(anchor.href);
+  }, true);
+};
 
-/*
- * One marimo app can be split across many anywidget outputs. Keep page-global
- * runtime state here, then release mount-owned observers and shared nodes when
- * each anywidget unmounts.
- */
-const loadedModules = new Map();
-const notebookCodeNodes = new Map();
-const appRecords = new Map();
-const observedShadowRoots = new WeakMap();
-const observedShadowRootStyles = new WeakMap();
-const shadowRootsByMount = new Map();
-const themedRoots = new Map();
-
-let themeObserverStarted = false;
-let documentNavigationStarted = false;
-
-/*
- * Styling contract:
- * - the bridge owns structure: mounting, pending previews, skeletons, and
- *   shadow-root style transport;
- * - book themes own color: they can set --jbm-* variables with normal CSS;
- * - custom stylesheets are the escape hatch for widget-specific shadow DOM.
- */
-const globalThemeCss = `
+// widget/styles.ts
+var outputClass = "marimo-jupyter-book-output";
+var loadingClass = "marimo-jupyter-book-loading";
+var pendingClass = "marimo-jupyter-book-pending";
+var previewClass = "marimo-jupyter-book-preview";
+var runtimeElementSelector = "marimo-anywidget, marimo-ui-element, marimo-mime-renderer, marimo-json-output, marimo-table";
+var nestedRuntimeContainerSelector = "marimo-accordion, marimo-tabs, marimo-carousel";
+var themeStyleId = "marimo-jupyter-book-theme";
+var shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
+var customStyleAttribute = "data-jupyter-book-marimo-custom-style";
+var globalThemeCss = `
 .${outputClass} {
   color: inherit;
   color-scheme: inherit;
@@ -179,8 +396,7 @@ const globalThemeCss = `
   width: 44%;
 }
 `;
-
-const shadowThemeCss = `
+var shadowThemeCss = `
 :host {
   color-scheme: inherit;
   --background: var(--jbm-background, Canvas);
@@ -214,362 +430,256 @@ const shadowThemeCss = `
 }
 `;
 
-// Read anywidget models without assuming the host uses Backbone-style .get().
-function getModelValue(model, key, fallback = "") {
-  if (model && typeof model.get === "function") {
-    const value = model.get(key);
-    return value == null ? fallback : value;
-  }
-  const value = model?.[key];
-  return value == null ? fallback : value;
-}
-
-function getModelString(model, key) {
-  const value = getModelValue(model, key);
-  return typeof value === "string" ? value : "";
-}
-
-function getModelStringList(model, key) {
-  const value = getModelValue(model, key, []);
-  if (Array.isArray(value)) {
-    return value.filter((item) => typeof item === "string");
-  }
-  return typeof value === "string" ? [value] : [];
-}
-
-function getModelStyleBlocks(model) {
-  const value = getModelValue(model, "customStyleBlocks", []);
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        typeof item.id === "string" &&
-        typeof item.css === "string",
-    )
-    .map((item) => ({ id: item.id, css: item.css }));
-}
-
-// Normalize exported island fragments before mounting them into light DOM.
-function parseHtml(html) {
-  const template = document.createElement("template");
-  template.innerHTML = typeof html === "string" ? html : "";
-  return template.content;
-}
-
-function stringHash(value) {
-  let hash = 5381;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 33) ^ value.charCodeAt(index);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function decodeMarimoCode(fragment) {
-  const node = fragment.querySelector("marimo-code");
-  const encoded = node?.textContent?.trim();
-  if (!encoded) return "";
-  try {
-    return decodeURIComponent(encoded);
-  } catch {
-    return encoded;
-  }
-}
-
-function appIdFrom(fragment, notebookCode) {
-  const island = fragment.querySelector("marimo-island[data-app-id]");
-  if (island) return island.getAttribute("data-app-id") ?? "";
-  return notebookCode ? `marimo-${stringHash(notebookCode)}` : "";
-}
-
-// marimo's runtime reads this global while its module evaluates.
-function installExportContext(notebookCode) {
-  if (!notebookCode) return;
-  Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
-    value: Object.freeze({ trusted: true, notebookCode }),
-    writable: false,
-    configurable: true,
-  });
-}
-
-function retainNotebookCode(appId, notebookCode) {
-  /*
-   * marimo discovers exported notebook source from light-DOM marimo-code nodes.
-   * anywidget renders in a shadow root, so the bridge hoists one hidden shared
-   * source node per app and reference-counts it across outputs.
-   */
-  if (!appId || !notebookCode) return () => {};
-
-  const existing = notebookCodeNodes.get(appId);
-  if (existing) {
-    existing.uses += 1;
-    return () => releaseNotebookCode(appId);
-  }
-
-  const node = document.createElement("marimo-code");
-  node.hidden = true;
-  node.dataset.appId = appId;
-  node.dataset.jupyterBookMarimo = "true";
-  node.textContent = encodeURIComponent(notebookCode);
-  document.body.appendChild(node);
-
-  notebookCodeNodes.set(appId, { node, uses: 1 });
-  return () => releaseNotebookCode(appId);
-}
-
-function releaseNotebookCode(appId) {
-  const record = notebookCodeNodes.get(appId);
-  if (!record) return;
-
-  record.uses -= 1;
-  if (record.uses > 0) return;
-
-  record.node.remove();
-  notebookCodeNodes.delete(appId);
-}
-
-function linksFromFragment(fragment) {
-  return Array.from(
-    fragment.querySelectorAll("link[href]"),
-    (link) =>
-      Object.fromEntries(
-        Array.from(link.attributes, (attribute) => [
-          attribute.name,
-          attribute.value,
-        ]),
-      ),
-  );
-}
-
-function modulesFromFragment(fragment) {
-  return Array.from(
-    fragment.querySelectorAll('script[type="module"][src]'),
-    (script) => script.getAttribute("src"),
-  ).filter((src) => typeof src === "string" && src.length > 0);
-}
-
-function assetsFromModel(model, head) {
-  // Prefer structured assets from Python; fall back to old head HTML payloads.
-  const assets = getModelValue(model, "assets", {});
-  const record = assets && typeof assets === "object" ? assets : {};
-  return {
-    links: Array.isArray(record.links) ? record.links : linksFromFragment(head),
-    moduleScripts: Array.isArray(record.moduleScripts)
-      ? record.moduleScripts.filter((src) => typeof src === "string")
-      : modulesFromFragment(head),
-  };
-}
-
-// Load marimo runtime assets once while preserving same-origin bridge loading.
-function ensureLinks(links) {
-  for (const attrs of links) {
-    if (!attrs?.href) continue;
-
-    const href = new URL(attrs.href, document.baseURI).href;
-    const rel = typeof attrs.rel === "string" ? attrs.rel : "";
-    const existing = Array.from(document.head.querySelectorAll("link[href]"))
-      .find(
-        (link) =>
-          link instanceof HTMLLinkElement &&
-          link.href === href &&
-          (link.getAttribute("rel") || "") === rel,
-      );
-    if (existing) continue;
-
-    const link = document.createElement("link");
-    for (const [key, value] of Object.entries(attrs)) {
-      if (value == null) continue;
-      link.setAttribute(key, String(value));
+// widget/output-dom.ts
+var firstElementChild = (node) => {
+  const child = node.firstElementChild;
+  return child instanceof HTMLElement ? child : null;
+};
+var stripHeadOnlyNodes = (fragment) => {
+  fragment.querySelectorAll("script, link, marimo-code, marimo-filename").forEach((node) => node.remove());
+};
+var suppressMimeRenderers = (root, mimetypes) => {
+  if (mimetypes.length === 0) return;
+  root.querySelectorAll("marimo-mime-renderer").forEach((node) => {
+    const mime = (node.getAttribute("data-mime") ?? "").trim().replace(/^["']|["']$/g, "");
+    if (mimetypes.includes(mime)) {
+      node.remove();
     }
-    link.href = href;
-    document.head.appendChild(link);
+  });
+};
+var observeSuppressedMimeRenderers = (root, mimetypes) => {
+  suppressMimeRenderers(root, mimetypes);
+  if (mimetypes.length === 0) return () => {
+  };
+  const observer = new MutationObserver(() => {
+    suppressMimeRenderers(root, mimetypes);
+  });
+  observer.observe(root, {
+    childList: true,
+    subtree: true
+  });
+  return () => observer.disconnect();
+};
+var containsMarimoUiElement = (node) => {
+  return [
+    "data-data",
+    "data-json-data"
+  ].map((name) => node.getAttribute(name) ?? "").some((value) => value.includes("marimo-ui-element"));
+};
+var isDisplayCodeEditor = (node) => {
+  return node.matches("marimo-ui-element") && Boolean(node.querySelector("marimo-code-editor"));
+};
+var shouldDeferServerRuntimeElement = (node) => {
+  if (isDisplayCodeEditor(node)) {
+    return false;
   }
-}
+  if (node.matches("marimo-anywidget, marimo-ui-element, marimo-table")) {
+    return true;
+  }
+  if (node.matches("marimo-mime-renderer, marimo-json-output")) {
+    return containsMarimoUiElement(node);
+  }
+  return false;
+};
+var hasDeferredRuntimeAncestor = (node) => {
+  return Boolean(node.parentElement?.closest(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`));
+};
+var canUsePendingPreview = (node) => {
+  if (node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
+    return false;
+  }
+  return !node.querySelector(runtimeElementSelector);
+};
+var replaceWithPendingPreview = (node) => {
+  const wrapper = document.createElement("div");
+  wrapper.className = pendingClass;
+  wrapper.setAttribute("aria-busy", "true");
+  wrapper.setAttribute("aria-disabled", "true");
+  wrapper.inert = true;
+  if (canUsePendingPreview(node)) {
+    const preview = document.createElement("div");
+    preview.className = previewClass;
+    wrapper.append(preview, loadingNode());
+    node.replaceWith(wrapper);
+    preview.append(node);
+  } else {
+    wrapper.append(loadingNode());
+    node.replaceWith(wrapper);
+  }
+  return wrapper;
+};
+var deferServerRuntimeElements = (fragment) => {
+  fragment.querySelectorAll(runtimeElementSelector).forEach((node) => {
+    if (hasDeferredRuntimeAncestor(node)) return;
+    if (!shouldDeferServerRuntimeElement(node)) return;
+    replaceWithPendingPreview(node);
+  });
+};
+var deferNestedServerRuntimeElements = (fragment) => {
+  fragment.querySelectorAll(nestedRuntimeContainerSelector).forEach((node) => {
+    if (hasDeferredRuntimeAncestor(node)) return;
+    if (!node.innerHTML.includes("marimo-ui-element")) return;
+    replaceWithPendingPreview(node);
+  });
+};
+var hasVisiblePreview = (wrapper) => {
+  const preview = wrapper.querySelector(`:scope > .${previewClass}`);
+  if (!(preview instanceof HTMLElement)) return false;
+  if (preview.textContent.trim()) return true;
+  const rect = preview.getBoundingClientRect();
+  return rect.width > 1 && rect.height > 1;
+};
+var refreshPendingPreviews = (root) => {
+  root.querySelectorAll(`.${pendingClass}`).forEach((wrapper) => {
+    if (!(wrapper instanceof HTMLElement)) return;
+    if (hasVisiblePreview(wrapper)) {
+      wrapper.dataset.hasPreview = "true";
+    } else {
+      delete wrapper.dataset.hasPreview;
+    }
+  });
+};
+var schedulePendingPreviews = (root) => {
+  refreshPendingPreviews(root);
+  requestAnimationFrame(() => refreshPendingPreviews(root));
+  for (const delay of [
+    100,
+    500,
+    1500,
+    3e3
+  ]) {
+    setTimeout(() => refreshPendingPreviews(root), delay);
+  }
+};
+var cellIdFromIsland = (island) => {
+  try {
+    const runtimeIsland = island;
+    return typeof runtimeIsland.cellId === "string" ? runtimeIsland.cellId : "";
+  } catch {
+    return island.getAttribute("data-cell-id") ?? "";
+  }
+};
+var syncIslandCellContainers = (root) => {
+  root.querySelectorAll("marimo-island").forEach((island) => {
+    const cellId = cellIdFromIsland(island);
+    const container = firstElementChild(island);
+    if (!cellId || !container) return;
+    if (container.tagName === "DIV") {
+      container.id = `cell-${cellId}`;
+    }
+  });
+};
+var scheduleIslandCellContainers = (root) => {
+  syncIslandCellContainers(root);
+  const frame = requestAnimationFrame(() => syncIslandCellContainers(root));
+  const timeouts = [
+    100,
+    500,
+    1500,
+    3e3,
+    5e3
+  ].map((delay) => setTimeout(() => syncIslandCellContainers(root), delay));
+  const observer = new MutationObserver(() => syncIslandCellContainers(root));
+  observer.observe(root, {
+    childList: true,
+    subtree: true
+  });
+  return () => {
+    cancelAnimationFrame(frame);
+    timeouts.forEach(clearTimeout);
+    observer.disconnect();
+  };
+};
+var clearHost = (host) => {
+  host.querySelectorAll(`:scope > .${outputClass}`).forEach((node) => node.remove());
+};
+var createLightDomMount = (el) => {
+  const root = el.getRootNode();
+  const host = root instanceof ShadowRoot && root.host instanceof HTMLElement ? root.host : el;
+  if (root instanceof ShadowRoot) {
+    root.replaceChildren(document.createElement("slot"));
+  }
+  clearHost(host);
+  const mount = document.createElement("div");
+  mount.className = outputClass;
+  host.appendChild(mount);
+  return mount;
+};
+var loadingNode = () => {
+  const node = document.createElement("div");
+  node.className = loadingClass;
+  node.setAttribute("role", "status");
+  node.setAttribute("aria-label", "Loading marimo output");
+  for (let index = 0; index < 3; index += 1) {
+    node.appendChild(document.createElement("span"));
+  }
+  return node;
+};
+var runtimeError = (error) => {
+  const details = document.createElement("details");
+  details.className = "marimo-plugin-fallback";
+  details.open = true;
+  const summary = document.createElement("summary");
+  summary.textContent = "Failed to load marimo output";
+  const pre = document.createElement("pre");
+  pre.textContent = error instanceof Error ? error.message : String(error);
+  details.append(summary, pre);
+  return details;
+};
 
-function normalizedStylesheetHrefs(stylesheets) {
-  return Array.from(
-    new Set(
-      stylesheets
-        .filter((stylesheet) => typeof stylesheet === "string")
-        .map((stylesheet) => stylesheet.trim())
-        .filter(Boolean)
-        .map((stylesheet) => new URL(stylesheet, document.baseURI).href),
-    ),
-  );
-}
-
-function hasCustomStylesheet(parent, href) {
-  return Array.from(parent.querySelectorAll(`link[${customStyleAttribute}]`))
-    .some(
-      (link) =>
-        link instanceof HTMLLinkElement &&
-        new URL(link.href, document.baseURI).href === href,
-    );
-}
-
-function ensureCustomStylesheets(root, stylesheets) {
+// widget/theme.ts
+var observedShadowRoots = /* @__PURE__ */ new WeakMap();
+var observedShadowRootStyles = /* @__PURE__ */ new WeakMap();
+var shadowRootsByMount = /* @__PURE__ */ new Map();
+var themedRoots = /* @__PURE__ */ new Map();
+var themeObserverStarted = false;
+var ensureThemeStyle = () => {
+  if (document.getElementById(themeStyleId)) return;
+  const style = document.createElement("style");
+  style.id = themeStyleId;
+  style.textContent = globalThemeCss;
+  document.head.appendChild(style);
+};
+var normalizedStylesheetHrefs = (stylesheets) => {
+  return Array.from(new Set(stylesheets.filter((stylesheet) => typeof stylesheet === "string").map((stylesheet) => stylesheet.trim()).filter(Boolean).map((stylesheet) => new URL(stylesheet, document.baseURI).href)));
+};
+var hasCustomStylesheet = (parent, href) => {
+  return Array.from(parent.querySelectorAll(`link[${customStyleAttribute}]`)).some((link) => link instanceof HTMLLinkElement && new URL(link.href, document.baseURI).href === href);
+};
+var ensureCustomStylesheets = (root, stylesheets) => {
   const parent = root instanceof ShadowRoot ? root : document.head;
   for (const href of normalizedStylesheetHrefs(stylesheets)) {
     if (hasCustomStylesheet(parent, href)) continue;
-
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = href;
     link.setAttribute(customStyleAttribute, "true");
     parent.appendChild(link);
   }
-}
-
-function normalizedStyleBlocks(styleBlocks) {
-  const seen = new Set();
+};
+var normalizedStyleBlocks = (styleBlocks) => {
+  const seen = /* @__PURE__ */ new Set();
   const normalized = [];
   for (const block of styleBlocks) {
-    if (!block?.id || seen.has(block.id)) continue;
+    if (!block.id || seen.has(block.id)) continue;
     seen.add(block.id);
     normalized.push(block);
   }
   return normalized;
-}
-
-function ensureCustomStyleBlocks(root, styleBlocks) {
+};
+var ensureCustomStyleBlocks = (root, styleBlocks) => {
   const parent = root instanceof ShadowRoot ? root : document.head;
   for (const block of normalizedStyleBlocks(styleBlocks)) {
-    const existing = Array.from(
-      parent.querySelectorAll(`style[${customStyleAttribute}]`),
-    ).find((node) => node.dataset.styleId === block.id);
+    const existing = Array.from(parent.querySelectorAll(`style[${customStyleAttribute}]`)).find((node) => node instanceof HTMLStyleElement && node.dataset.styleId === block.id);
     if (existing) continue;
-
     const style = document.createElement("style");
     style.setAttribute(customStyleAttribute, "true");
     style.dataset.styleId = block.id;
     style.textContent = block.css;
     parent.appendChild(style);
   }
-}
-
-function ensureModule(src) {
-  // Dynamic import is the browser-visible equivalent of loading marimo's head.
-  const href = new URL(src, document.baseURI).href;
-  if (loadedModules.has(href)) return loadedModules.get(href);
-
-  const promise = import(href).then(
-    () => undefined,
-    () => {
-      throw new Error(`Failed to load marimo runtime: ${href}`);
-    },
-  );
-
-  loadedModules.set(href, promise);
-  return promise;
-}
-
-function appRecord(appId) {
-  /*
-   * One payload-bearing island boots the marimo app. Sibling islands with the
-   * same appId share this readiness promise instead of re-importing assets.
-   */
-  const existing = appRecords.get(appId);
-  if (existing) return existing;
-
-  const record = {
-    ready: false,
-    started: false,
-    uses: 0,
-    promise: null,
-    resolve: () => {},
-    reject: () => {},
-  };
-
-  record.promise = new Promise((resolve, reject) => {
-    record.resolve = resolve;
-    record.reject = reject;
-  });
-
-  appRecords.set(appId, record);
-  return record;
-}
-
-function retainApp(appId, notebookCode, assets) {
-  if (!appId) return () => {};
-
-  const record = appRecord(appId);
-  record.uses += 1;
-
-  if (!record.started) {
-    record.started = true;
-    installExportContext(notebookCode);
-    ensureLinks(assets.links);
-    Promise.all(assets.moduleScripts.map(ensureModule)).then(
-      () => {
-        record.ready = true;
-        record.resolve();
-      },
-      (error) => {
-        record.reject(error);
-        appRecords.delete(appId);
-      },
-    );
-  }
-
-  return () => releaseApp(appId);
-}
-
-function releaseApp(appId) {
-  const record = appRecords.get(appId);
-  if (!record) return;
-
-  record.uses -= 1;
-  if (record.uses > 0) return;
-
-  appRecords.delete(appId);
-}
-
-// Mirror book theme and custom styles across marimo's nested shadow roots.
-function ensureThemeStyle() {
-  if (document.getElementById(themeStyleId)) return;
-
-  const style = document.createElement("style");
-  style.id = themeStyleId;
-  style.textContent = globalThemeCss;
-  document.head.appendChild(style);
-}
-
-function shouldUseDocumentNavigation(event, anchor) {
-  if (event.defaultPrevented || event.button !== 0) return false;
-  if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
-    return false;
-  }
-  if (anchor.target && anchor.target !== "_self") return false;
-  if (anchor.hasAttribute("download")) return false;
-
-  const url = new URL(anchor.href, document.baseURI);
-  if (url.origin !== window.location.origin) return false;
-  return url.pathname !== window.location.pathname ||
-    url.search !== window.location.search;
-}
-
-function ensureDocumentNavigation() {
-  if (documentNavigationStarted) return;
-  documentNavigationStarted = true;
-
-  // The marimo islands runtime is initialized per document. Jupyter Book's
-  // client-side page swaps can otherwise keep a stale runtime bridge alive.
-  document.addEventListener(
-    "click",
-    (event) => {
-      const anchor = event.target?.closest?.("a[href]");
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      if (!shouldUseDocumentNavigation(event, anchor)) return;
-
-      event.preventDefault();
-      window.location.assign(anchor.href);
-    },
-    true,
-  );
-}
-
-function themeFromToken(value) {
+};
+var themeFromToken = (value) => {
   if (typeof value !== "string") return "";
   const normalized = value.toLowerCase();
   for (const token of normalized.split(/[\s,]+/)) {
@@ -580,16 +690,15 @@ function themeFromToken(value) {
   if (hasDark && !hasLight) return "dark";
   if (hasLight && !hasDark) return "light";
   return "";
-}
-
-function explicitThemeFromElement(element) {
+};
+var explicitThemeFromElement = (element) => {
   if (!(element instanceof HTMLElement)) return "";
   const attributes = [
     element.dataset.theme,
     element.dataset.mode,
     element.dataset.colorMode,
     element.dataset.bsTheme,
-    element.getAttribute("theme"),
+    element.getAttribute("theme")
   ];
   for (const value of attributes) {
     const theme = themeFromToken(value);
@@ -598,46 +707,64 @@ function explicitThemeFromElement(element) {
   if (element.classList.contains("dark")) return "dark";
   if (element.classList.contains("light")) return "light";
   return "";
-}
-
-function luminanceFromColor(value) {
+};
+var luminanceFromColor = (value) => {
   const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (!match) return null;
   const [, red, green, blue] = match.map(Number);
   return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
-}
-
-function colorSchemeFromDocument() {
-  /*
-   * Book themes expose dark/light state inconsistently, so prefer explicit
-   * tokens and fall back to computed color before consulting OS preference.
-   */
-  for (const element of [document.documentElement, document.body]) {
+};
+var colorSchemeFromDocument = () => {
+  for (const element of [
+    document.documentElement,
+    document.body
+  ]) {
     const explicit = explicitThemeFromElement(element);
     if (explicit) return explicit;
   }
-
   const colorScheme = getComputedStyle(document.documentElement).colorScheme;
   const explicitScheme = themeFromToken(colorScheme);
   if (explicitScheme) return explicitScheme;
-
-  const background = getComputedStyle(document.body).backgroundColor ||
-    getComputedStyle(document.documentElement).backgroundColor;
+  const background = getComputedStyle(document.body).backgroundColor || getComputedStyle(document.documentElement).backgroundColor;
   const luminance = luminanceFromColor(background);
   if (luminance != null) return luminance < 0.5 ? "dark" : "light";
-
-  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches
-    ? "dark"
-    : "light";
-}
-
-function syncHostTheme(host) {
+  return globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+};
+var syncHostTheme = (host) => {
+  if (!(host instanceof HTMLElement)) return;
   const theme = colorSchemeFromDocument();
   host.dataset.jbTheme = theme;
   host.dataset.jbColorScheme = theme;
-}
-
-function ensureThemeObserver() {
+};
+var installShadowTheme = (root, stylesheets = [], styleBlocks = [], owner = null) => {
+  ensureThemeObserver();
+  if (root instanceof HTMLElement) syncHostTheme(root);
+  for (const node of root.querySelectorAll("*")) {
+    const shadow = node.shadowRoot;
+    if (!shadow) continue;
+    syncHostTheme(node);
+    observeShadowRoot(shadow, stylesheets, styleBlocks, owner);
+    if (!shadow.getElementById(shadowThemeStyleId)) {
+      const style = document.createElement("style");
+      style.id = shadowThemeStyleId;
+      style.textContent = shadowThemeCss;
+      shadow.appendChild(style);
+    }
+    ensureCustomStyleBlocks(shadow, styleBlocks);
+    ensureCustomStylesheets(shadow, stylesheets);
+    installShadowTheme(shadow, stylesheets, styleBlocks, owner);
+  }
+};
+var refreshThemedRoots = () => {
+  for (const [root, customStyles] of Array.from(themedRoots.entries())) {
+    if (!root.isConnected) {
+      themedRoots.delete(root);
+      continue;
+    }
+    installShadowTheme(root, customStyles.stylesheets, customStyles.styleBlocks, root);
+  }
+};
+var ensureThemeObserver = () => {
   if (themeObserverStarted) return;
   themeObserverStarted = true;
   const observer = new MutationObserver(() => refreshThemedRoots());
@@ -650,82 +777,59 @@ function ensureThemeObserver() {
       "data-color-mode",
       "data-bs-theme",
       "style",
-      "theme",
-    ],
+      "theme"
+    ]
   };
   observer.observe(document.documentElement, options);
   if (document.body) observer.observe(document.body, options);
-}
-
-function refreshThemedRoots() {
-  for (const [root, customStyles] of Array.from(themedRoots.entries())) {
-    if (!root.isConnected) {
-      themedRoots.delete(root);
-      continue;
-    }
-    installShadowTheme(
-      root,
-      customStyles.stylesheets,
-      customStyles.styleBlocks,
-      root,
-    );
-  }
-}
-
-function rememberShadowStyles(shadow, stylesheets, styleBlocks) {
-  // A shadow root can be discovered by multiple mounts; merge style state.
+};
+var rememberShadowStyles = (shadow, stylesheets, styleBlocks) => {
   const existing = observedShadowRootStyles.get(shadow) ?? {
     stylesheets: [],
-    styleBlocks: [],
+    styleBlocks: []
   };
-  observedShadowRootStyles.set(
-    shadow,
-    {
-      stylesheets: normalizedStylesheetHrefs([
-        ...existing.stylesheets,
-        ...stylesheets,
-      ]),
-      styleBlocks: normalizedStyleBlocks([
-        ...existing.styleBlocks,
-        ...styleBlocks,
-      ]),
-    },
-  );
-}
-
-function observeShadowRoot(shadow, stylesheets, styleBlocks, owner) {
+  observedShadowRootStyles.set(shadow, {
+    stylesheets: normalizedStylesheetHrefs([
+      ...existing.stylesheets,
+      ...stylesheets
+    ]),
+    styleBlocks: normalizedStyleBlocks([
+      ...existing.styleBlocks,
+      ...styleBlocks
+    ])
+  });
+};
+var observeShadowRoot = (shadow, stylesheets, styleBlocks, owner) => {
   rememberShadowStyles(shadow, stylesheets, styleBlocks);
   let record = observedShadowRoots.get(shadow);
   if (!record) {
-    // marimo components can attach deeper shadow roots after the first pass.
     const observer = new MutationObserver(() => {
       const customStyles = observedShadowRootStyles.get(shadow) ?? {
         stylesheets: [],
-        styleBlocks: [],
+        styleBlocks: []
       };
-      installShadowTheme(
-        shadow,
-        customStyles.stylesheets,
-        customStyles.styleBlocks,
-        owner,
-      );
+      installShadowTheme(shadow, customStyles.stylesheets, customStyles.styleBlocks, owner);
     });
-    observer.observe(shadow, { childList: true, subtree: true });
-    record = { observer, owners: new Set() };
+    observer.observe(shadow, {
+      childList: true,
+      subtree: true
+    });
+    record = {
+      observer,
+      owners: /* @__PURE__ */ new Set()
+    };
     observedShadowRoots.set(shadow, record);
   }
   if (owner) {
     record.owners.add(owner);
-    const shadows = shadowRootsByMount.get(owner) ?? new Set();
+    const shadows = shadowRootsByMount.get(owner) ?? /* @__PURE__ */ new Set();
     shadows.add(shadow);
     shadowRootsByMount.set(owner, shadows);
   }
-}
-
-function releaseShadowObservers(owner) {
+};
+var releaseShadowObservers = (owner) => {
   const shadows = shadowRootsByMount.get(owner);
   if (!shadows) return;
-
   for (const shadow of shadows) {
     const record = observedShadowRoots.get(shadow);
     if (!record) continue;
@@ -737,354 +841,52 @@ function releaseShadowObservers(owner) {
     }
   }
   shadowRootsByMount.delete(owner);
-}
-
-function installShadowTheme(root, stylesheets = [], styleBlocks = [], owner = null) {
-  ensureThemeObserver();
-  if (root instanceof HTMLElement) syncHostTheme(root);
-  for (const node of root.querySelectorAll("*")) {
-    const shadow = node.shadowRoot;
-    if (!shadow) continue;
-
-    syncHostTheme(node);
-    observeShadowRoot(shadow, stylesheets, styleBlocks, owner);
-
-    if (!shadow.getElementById(shadowThemeStyleId)) {
-      const style = document.createElement("style");
-      style.id = shadowThemeStyleId;
-      style.textContent = shadowThemeCss;
-      shadow.appendChild(style);
-    }
-    ensureCustomStyleBlocks(shadow, styleBlocks);
-    ensureCustomStylesheets(shadow, stylesheets);
-
-    installShadowTheme(shadow, stylesheets, styleBlocks, owner);
-  }
-}
-
-function scheduleShadowTheme(mount, stylesheets = [], styleBlocks = []) {
-  /*
-   * marimo UI creates shadow roots asynchronously. The timed passes catch roots
-   * attached after React/custom-element hydration, and the observer handles
-   * later nested UI changes.
-   */
+};
+var scheduleShadowTheme = (mount, stylesheets = [], styleBlocks = []) => {
   ensureThemeObserver();
   const normalized = normalizedStylesheetHrefs(stylesheets);
   const blocks = normalizedStyleBlocks(styleBlocks);
-  themedRoots.set(mount, { stylesheets: normalized, styleBlocks: blocks });
+  themedRoots.set(mount, {
+    stylesheets: normalized,
+    styleBlocks: blocks
+  });
   installShadowTheme(mount, normalized, blocks, mount);
   requestAnimationFrame(() => installShadowTheme(mount, normalized, blocks, mount));
-  for (const delay of [100, 500, 2000, 5000]) {
+  for (const delay of [
+    100,
+    500,
+    2e3,
+    5e3
+  ]) {
     setTimeout(() => installShadowTheme(mount, normalized, blocks, mount), delay);
   }
-  const observer = new MutationObserver(() =>
-    installShadowTheme(mount, normalized, blocks, mount),
-  );
-  observer.observe(mount, { childList: true, subtree: true });
+  const observer = new MutationObserver(() => installShadowTheme(mount, normalized, blocks, mount));
+  observer.observe(mount, {
+    childList: true,
+    subtree: true
+  });
   return () => {
     observer.disconnect();
     releaseShadowObservers(mount);
     themedRoots.delete(mount);
   };
-}
+};
 
-function stripHeadOnlyNodes(fragment) {
-  fragment
-    .querySelectorAll("script, link, marimo-code, marimo-filename")
-    .forEach((node) => node.remove());
-}
-
-function suppressMimeRenderers(root, mimetypes) {
-  // Used after `error: false`: keep successful output, remove error renderers.
-  if (mimetypes.length === 0) return;
-
-  root.querySelectorAll("marimo-mime-renderer").forEach((node) => {
-    const mime = (node.getAttribute("data-mime") ?? "").trim().replace(/^["']|["']$/g, "");
-    if (mimetypes.includes(mime)) {
-      node.remove();
-    }
-  });
-}
-
-function observeSuppressedMimeRenderers(root, mimetypes) {
-  suppressMimeRenderers(root, mimetypes);
-  if (mimetypes.length === 0) return () => {};
-
-  const observer = new MutationObserver(() => {
-    suppressMimeRenderers(root, mimetypes);
-  });
-  observer.observe(root, { childList: true, subtree: true });
-  return () => observer.disconnect();
-}
-
-function containsMarimoUiElement(node) {
-  return ["data-data", "data-json-data"]
-    .map((name) => node.getAttribute(name) ?? "")
-    .some((value) => value.includes("marimo-ui-element"));
-}
-
-function isDisplayCodeEditor(node) {
-  return node.matches("marimo-ui-element") &&
-    node.querySelector("marimo-code-editor");
-}
-
-function shouldDeferServerRuntimeElement(node) {
-  /*
-   * Server-rendered interactive elements are stale placeholders until browser
-   * marimo recreates them. Display-code editors are static source views, so
-   * leave those in place.
-   */
-  if (isDisplayCodeEditor(node)) {
-    return false;
-  }
-  if (node.matches("marimo-anywidget, marimo-ui-element, marimo-table")) {
-    return true;
-  }
-  if (node.matches("marimo-mime-renderer, marimo-json-output")) {
-    return containsMarimoUiElement(node);
-  }
-  return false;
-}
-
-function hasDeferredRuntimeAncestor(node) {
-  return Boolean(
-    node.parentElement?.closest(
-      `${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`,
-    ),
-  );
-}
-
-function canUsePendingPreview(node) {
-  if (node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
-    return false;
-  }
-  return !node.querySelector(runtimeElementSelector);
-}
-
-function replaceWithPendingPreview(node) {
-  /*
-   * Preserve static HTML as a dimmed preview only when it does not itself contain
-   * live marimo runtime elements that the browser will recreate.
-   */
-  const wrapper = document.createElement("div");
-  wrapper.className = pendingClass;
-  wrapper.setAttribute("aria-busy", "true");
-  wrapper.setAttribute("aria-disabled", "true");
-  wrapper.inert = true;
-
-  if (canUsePendingPreview(node)) {
-    const preview = document.createElement("div");
-    preview.className = previewClass;
-
-    wrapper.append(preview, loadingNode());
-    node.replaceWith(wrapper);
-    preview.append(node);
-  } else {
-    wrapper.append(loadingNode());
-    node.replaceWith(wrapper);
-  }
-  return wrapper;
-}
-
-function deferServerRuntimeElements(fragment) {
-  fragment
-    .querySelectorAll(runtimeElementSelector)
-    .forEach((node) => {
-      if (hasDeferredRuntimeAncestor(node)) return;
-      if (!shouldDeferServerRuntimeElement(node)) return;
-      replaceWithPendingPreview(node);
-    });
-}
-
-function deferNestedServerRuntimeElements(fragment) {
-  fragment
-    .querySelectorAll(nestedRuntimeContainerSelector)
-    .forEach((node) => {
-      if (hasDeferredRuntimeAncestor(node)) return;
-      if (!node.innerHTML.includes("marimo-ui-element")) return;
-      replaceWithPendingPreview(node);
-    });
-}
-
-function hasVisiblePreview(wrapper) {
-  const preview = wrapper.querySelector(`:scope > .${previewClass}`);
-  if (!(preview instanceof HTMLElement)) return false;
-  if (preview.textContent.trim()) return true;
-
-  const rect = preview.getBoundingClientRect();
-  return rect.width > 1 && rect.height > 1;
-}
-
-function refreshPendingPreviews(root) {
-  root.querySelectorAll(`.${pendingClass}`).forEach((wrapper) => {
-    if (!(wrapper instanceof HTMLElement)) return;
-    if (hasVisiblePreview(wrapper)) {
-      wrapper.dataset.hasPreview = "true";
-    } else {
-      delete wrapper.dataset.hasPreview;
-    }
-  });
-}
-
-function schedulePendingPreviews(root) {
-  // Preview visibility can change after fonts, custom elements, or layout settle.
-  refreshPendingPreviews(root);
-  requestAnimationFrame(() => refreshPendingPreviews(root));
-  for (const delay of [100, 500, 1500, 3000]) {
-    setTimeout(() => refreshPendingPreviews(root), delay);
-  }
-}
-
-function cellIdFromIsland(island) {
-  try {
-    return typeof island.cellId === "string" ? island.cellId : "";
-  } catch {
-    return island.getAttribute("data-cell-id") ?? "";
-  }
-}
-
-function firstElementChild(node) {
-  const child = node.firstElementChild;
-  return child instanceof HTMLElement ? child : null;
-}
-
-function syncIslandCellContainers(root) {
-  root.querySelectorAll("marimo-island").forEach((island) => {
-    const cellId = cellIdFromIsland(island);
-    const container = firstElementChild(island);
-    if (!cellId || !container) return;
-
-    /*
-     * marimo plugins locate their owning cell by walking to the nearest
-     * div#cell-*. Islands mount into a custom element, so expose the same
-     * runtime cell id on the React output wrapper once the browser runtime has
-     * resolved data-cell-idx to a concrete cell id.
-     */
-    if (container.tagName === "DIV") {
-      container.id = `cell-${cellId}`;
-    }
-  });
-}
-
-function scheduleIslandCellContainers(root) {
-  /*
-   * The browser runtime resolves `data-cell-idx` to `cellId` asynchronously.
-   * Retry and observe so plugin-facing div#cell-* wrappers appear once IDs land.
-   */
-  syncIslandCellContainers(root);
-
-  const frame = requestAnimationFrame(() => syncIslandCellContainers(root));
-  const timeouts = [100, 500, 1500, 3000, 5000].map((delay) =>
-    setTimeout(() => syncIslandCellContainers(root), delay),
-  );
-  const observer = new MutationObserver(() => syncIslandCellContainers(root));
-  observer.observe(root, { childList: true, subtree: true });
-
-  return () => {
-    cancelAnimationFrame(frame);
-    timeouts.forEach(clearTimeout);
-    observer.disconnect();
-  };
-}
-
-function clearHost(host) {
-  host
-    .querySelectorAll(`:scope > .${outputClass}`)
-    .forEach((node) => node.remove());
-}
-
-function createLightDomMount(el) {
-  /*
-   * anywidget gives us a shadow host, but marimo's runtime queries light DOM.
-   * Slot the host's shadow contents and mount beside the host so marimo's DOM
-   * walks can find notebook source, islands, and cell wrappers.
-   */
-  const root = el.getRootNode();
-  const host = root instanceof ShadowRoot ? root.host : el;
-
-  if (root instanceof ShadowRoot) {
-    root.replaceChildren(document.createElement("slot"));
-  }
-
-  clearHost(host);
-
-  const mount = document.createElement("div");
-  mount.className = outputClass;
-  host.appendChild(mount);
-  return mount;
-}
-
-function loadingNode() {
-  const node = document.createElement("div");
-  node.className = loadingClass;
-  node.setAttribute("role", "status");
-  node.setAttribute("aria-label", "Loading marimo output");
-  for (let index = 0; index < 3; index += 1) {
-    node.appendChild(document.createElement("span"));
-  }
-  return node;
-}
-
-function runtimeError(error) {
-  const details = document.createElement("details");
-  details.className = "marimo-plugin-fallback";
-  details.open = true;
-
-  const summary = document.createElement("summary");
-  summary.textContent = "Failed to load marimo output";
-
-  const pre = document.createElement("pre");
-  pre.textContent = error instanceof Error ? error.message : String(error);
-
-  details.append(summary, pre);
-  return details;
-}
-
-function readOutputModel(model) {
-  const head = parseHtml(getModelValue(model, "head"));
-  const body = parseHtml(getModelValue(model, "html"));
-  const notebookCode = getModelString(model, "notebookCode") ||
-    decodeMarimoCode(head) ||
-    decodeMarimoCode(body);
-
-  return {
-    body,
-    notebookCode,
-    appId: getModelString(model, "appId") || appIdFrom(body, notebookCode),
-    assets: assetsFromModel(model, head),
-    customStylesheets: getModelStringList(model, "customStylesheets"),
-    customStyleBlocks: getModelStyleBlocks(model),
-    suppressMimetypes: getModelStringList(model, "suppressMimetypes"),
-  };
-}
-
-function hasRuntimePayload(output) {
-  return Boolean(
-    output.notebookCode ||
-      output.assets.moduleScripts.length > 0 ||
-      output.assets.links.length > 0,
-  );
-}
-
-function isOutputBodyEmpty(output) {
-  return output.body.childNodes.length === 0;
-}
-
-function mountMarimo(model, el) {
-  /*
-   * Mount static HTML immediately, then hydrate when the shared app runtime is
-   * ready. Empty outputs can still carry the runtime payload for the whole page.
-   */
+// widget/container-widget.ts
+var mountMarimo = (model, el) => {
   const output = readOutputModel(model);
   const mount = createLightDomMount(el);
-
   let cancelled = false;
-  let releaseCode = () => {};
-  let releaseAppRecord = () => {};
-  let releaseMimeObserver = () => {};
-  let releaseTheme = () => {};
-  let releaseCellContainers = () => {};
-
+  let releaseCode = () => {
+  };
+  let releaseAppRecord = () => {
+  };
+  let releaseMimeObserver = () => {
+  };
+  let releaseTheme = () => {
+  };
+  let releaseCellContainers = () => {
+  };
   stripHeadOnlyNodes(output.body);
   suppressMimeRenderers(output.body, output.suppressMimetypes);
   deferNestedServerRuntimeElements(output.body);
@@ -1093,22 +895,13 @@ function mountMarimo(model, el) {
   ensureCustomStyleBlocks(document, output.customStyleBlocks);
   ensureCustomStylesheets(document, output.customStylesheets);
   ensureDocumentNavigation();
-
   const hasRuntime = Boolean(output.appId) || hasRuntimePayload(output);
   const hasPayload = hasRuntimePayload(output);
   const bodyIsEmpty = isOutputBodyEmpty(output);
-
   if (!bodyIsEmpty) {
     mount.replaceChildren(output.body);
-    releaseMimeObserver = observeSuppressedMimeRenderers(
-      mount,
-      output.suppressMimetypes,
-    );
-    releaseTheme = scheduleShadowTheme(
-      mount,
-      output.customStylesheets,
-      output.customStyleBlocks,
-    );
+    releaseMimeObserver = observeSuppressedMimeRenderers(mount, output.suppressMimetypes);
+    releaseTheme = scheduleShadowTheme(mount, output.customStylesheets, output.customStyleBlocks);
     releaseCellContainers = scheduleIslandCellContainers(mount);
     schedulePendingPreviews(mount);
   } else if (hasRuntime) {
@@ -1116,42 +909,29 @@ function mountMarimo(model, el) {
   } else {
     mount.replaceChildren();
   }
-
   const hydrate = async () => {
     try {
       if (hasPayload) {
         releaseCode = retainNotebookCode(output.appId, output.notebookCode);
       }
-
       if (output.appId && hasPayload) {
-        releaseAppRecord = retainApp(
-          output.appId,
-          output.notebookCode,
-          output.assets,
-        );
+        releaseAppRecord = retainApp(output.appId, output.notebookCode, output.assets);
       } else if (output.appId) {
         appRecord(output.appId);
       }
-
       if (output.appId) {
         await appRecord(output.appId).promise;
         if (!cancelled) {
           if (bodyIsEmpty) mount.replaceChildren();
           releaseTheme();
-          releaseTheme = scheduleShadowTheme(
-            mount,
-            output.customStylesheets,
-            output.customStyleBlocks,
-          );
+          releaseTheme = scheduleShadowTheme(mount, output.customStylesheets, output.customStyleBlocks);
         }
       }
     } catch (error) {
       if (!cancelled) mount.replaceChildren(runtimeError(error));
     }
   };
-
   hydrate();
-
   return () => {
     cancelled = true;
     releaseCode();
@@ -1161,12 +941,13 @@ function mountMarimo(model, el) {
     releaseCellContainers();
     mount.remove();
   };
-}
-
-const containerWidget = {
+};
+var containerWidget = {
   render({ model, el }) {
     return mountMarimo(model, el);
-  },
+  }
 };
-
-export default containerWidget;
+var container_widget_default = containerWidget;
+export {
+  container_widget_default as default
+};
