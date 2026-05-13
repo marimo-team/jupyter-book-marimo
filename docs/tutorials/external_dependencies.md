@@ -15,7 +15,7 @@ pyproject: |
 ---
 ```
 
-# External dependencies
+# Loading Custom Packages
 
 By default, `jupyter-book-marimo` creates a sandboxed Python environment with `uv`. To
 add a package for one document, declare it in a `{marimo-config}` directive with

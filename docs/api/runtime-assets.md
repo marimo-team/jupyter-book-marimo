@@ -4,37 +4,32 @@ title: Runtime assets
 
 # Runtime assets
 
-During a static build, three asset paths matter:
+`jupyter-book-marimo` connects three systems during a static build:
 
-| Path                                        | What happens                                           |
-| ------------------------------------------- | ------------------------------------------------------ |
-| `.jupyter-book-marimo/container-widget.mjs` | generated in the book source tree during the build     |
-| generated Jupyter Book assets               | Jupyter Book serves the fingerprinted anywidget bridge |
-| marimo island runtime URLs                  | load the marimo runtime assets emitted by marimo       |
+- MyST executes the Python plugin through the executable-plugin protocol.
+- Jupyter Book publishes the anywidget bridge as a same-origin ESM asset.
+- marimo provides the island runtime assets captured from cell execution.
 
-The generated `.jupyter-book-marimo/` directory gives Jupyter Book a same-origin ESM
-bridge that it can fingerprint and publish with the site.
+The bridge exists because marimo islands expect light DOM and notebook source, while
+MyST anywidgets render inside a widget host. Jupyter Book owns site publishing; marimo
+owns island execution and hydration; this package owns the adapter between them.
 
-## Source files
+For the upstream contracts, see
+[MyST executable plugins](https://mystmd.org/guide/executable-plugins),
+[MyST widgets](https://mystmd.org/guide/widgets), the
+[anywidget front-end module specification](https://anywidget.dev/en/afm/), and
+[Deno bundle](https://docs.deno.com/runtime/reference/cli/bundle/).
 
-Do not edit `.jupyter-book-marimo/`; it is generated output.
+## Source
 
-The maintained TypeScript source lives in the top-level Deno project:
+Edit the TypeScript source in `widget/`.
 
-```text
-widget/
-```
-
-The packaged runtime bundle is:
+Run `make widget-build` to regenerate:
 
 ```text
 src/jupyter_book_marimo/assets/container-widget.mjs
 ```
 
-Rebuild the packaged bundle with:
-
-```bash
-make widget-build
-```
-
-The package build checks that the generated bundle is current.
+The checked-in bundle is generated. Package users do not need Deno during normal book
+builds; Deno is the contributor toolchain for checking TypeScript and producing the
+browser ESM bundle.

@@ -4,7 +4,7 @@ title: Styling hooks
 
 # Styling hooks
 
-Style marimo outputs from your book CSS with the public wrapper class:
+The public CSS contract is the wrapper class around each rendered island:
 
 ```css
 .marimo-jupyter-book-output {
@@ -20,19 +20,5 @@ Style marimo outputs from your book CSS with the public wrapper class:
 }
 ```
 
-If a site needs CSS inside marimo-owned shadow roots, pass stylesheets at build time:
-
-```bash
-JUPYTER_BOOK_MARIMO_STYLESHEETS=styles/jupyter-book-marimo.css \
-  jupyter-book build --html
-```
-
-Local stylesheet files are embedded into the widget model and injected into the page
-plus nested marimo shadow roots. External `https://...` and site-root `/...` stylesheets
-are linked as-is.
-
-The executable also accepts repeated `--style` flags. This is useful when the Jupyter
-Book plugin entry points at a wrapper script.
-
-Use CSS variables for stable theme integration. Selectors that reach into marimo
-internals should stay local to your site.
+Use those variables from your book theme. Selectors that reach into marimo internals are
+not part of the public contract.

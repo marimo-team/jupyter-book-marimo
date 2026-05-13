@@ -20,15 +20,7 @@ slider
 ```
 ````
 
-Use one of three language arguments:
-
-| Language | Directive                  | Use for                           |
-| -------- | -------------------------- | --------------------------------- |
-| Python   | `` ```{marimo} python ``   | normal marimo Python cells        |
-| SQL      | `` ```{marimo} sql ``      | marimo SQL cells                  |
-| Markdown | `` ```{marimo} markdown `` | Markdown cells rendered by marimo |
-
-Write the language name as shown: `python`, `sql`, or `markdown`.
+The language argument must be `python`, `sql`, or `markdown`.
 
 ## Cell options
 
@@ -51,7 +43,6 @@ mo.md("show source and output")
 | `:editor:`      | `false` | show the source in a marimo editor            |
 | `:output:`      | `true`  | include rendered output                       |
 | `:error:`       | `true`  | render marimo error output instead of failing |
-| `:warning:`     | `true`  | keep warning output                           |
 | `:include:`     | `true`  | include this cell in the page                 |
 | `:hide-code:`   | `false` | force source code hidden                      |
 | `:hide-output:` | `false` | force output hidden                           |
@@ -101,3 +92,18 @@ This Markdown is executed as a marimo Markdown cell.
 
 Use ordinary MyST outside marimo cells when the content does not need marimo execution
 or reactivity.
+
+## Page defaults
+
+Use `{marimo-config}` once per page when cells should share defaults or dependencies:
+
+````markdown
+```{marimo-config}
+:header: |
+  import marimo as mo
+:echo: true
+```
+````
+
+See [Page configuration](configuration.md) for headers, defaults, and page-local
+dependencies.

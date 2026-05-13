@@ -6,8 +6,6 @@ title: Layout
 :header: # Copyright 2026 Marimo. All rights reserved
 ```
 
-# Layout
-
 `marimo` provides functions to help you lay out your output, such as in rows and
 columns, accordions, tabs, and callouts.
 

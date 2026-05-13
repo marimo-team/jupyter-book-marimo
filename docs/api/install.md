@@ -10,6 +10,12 @@ Install `jupyter-book-marimo` into the same Python environment as Jupyter Book.
 pip install jupyter-book-marimo
 ```
 
+For a uv-managed project, add it as a project dependency:
+
+```bash
+uv add jupyter-book-marimo
+```
+
 For local development from this repository:
 
 ```bash
@@ -25,8 +31,10 @@ project:
       path: .venv/bin/jupyter-book-marimo
 ```
 
-Use the executable path for your environment. In this repository, the docs app lives in
-`docs/`, so `docs/myst.yml` points at:
+Executable plugin mechanics are defined by
+[MyST executable plugins](https://mystmd.org/guide/executable-plugins). Use the
+executable path for your environment. In this repository, the docs app lives in `docs/`,
+so `docs/myst.yml` points at:
 
 ```yaml
 project:

@@ -1,5 +1,5 @@
 ---
-title: Fileformat
+title: File Format
 ---
 
 ```{marimo-config}
@@ -17,7 +17,7 @@ import random
 import marimo as mo
 ```
 
-# File Format
+# Anatomy of a marimo app
 
 marimo apps are stored as pure Python files.
 

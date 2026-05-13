@@ -25,7 +25,6 @@ Cell options override page defaults.
 | `:editor:`       | default editor visibility                      |
 | `:output:`       | default output visibility                      |
 | `:error:`        | default error handling                         |
-| `:warning:`      | default warning handling                       |
 | `:include:`      | default page inclusion                         |
 | `:header:`       | Python inserted before exported notebook code  |
 | `:pyproject:`    | dependencies for `uv run`                      |

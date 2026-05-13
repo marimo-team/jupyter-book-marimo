@@ -34,13 +34,15 @@ body:
               path: .venv/bin/jupyter-book-marimo
         ```
 
-        ```markdown
+        ````markdown
         # Repro
 
-        ```python {.marimo}
-        # your cell here
+        ```{marimo} python
+        import marimo as mo
+
+        mo.md("repro")
         ```
-        ```
+        ````
     validations:
       required: false
 

@@ -21,7 +21,7 @@ body:
     id: solution
     attributes:
       label: Proposed solution
-      description: Describe the behavior you'd like. Include example MyST or `.marimo` fence usage if applicable.
+      description: Describe the behavior you'd like. Include example `{marimo}` directive usage if applicable.
     validations:
       required: true
 

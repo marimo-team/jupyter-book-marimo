@@ -6,7 +6,7 @@ title: marimo for Jupyter users
 :header: # Copyright 2026 Marimo. All rights reserved
 ```
 
-# marimo for Jupyter users
+# Differences between marimo and Jupyter
 
 This notebook explains important differences between Jupyter and marimo. If you're
 familiar with Jupyter and are trying out marimo for the first time, read on!
