@@ -22,7 +22,9 @@ from typing import Any
 
 from .authoring import pyproject_to_script_metadata
 
-UV_RUN_TIMEOUT_SECONDS = 300
+UV_RUN_TIMEOUT_SECONDS = int(
+    os.environ.get("JUPYTER_BOOK_MARIMO_UV_TIMEOUT_SECONDS", "300")
+)
 
 
 async def extract(payload: dict[str, Any]) -> dict[str, Any]:
