@@ -223,7 +223,7 @@ class CellPlan:
     display_output: bool
     execute: bool
     disabled: bool
-    unparseable: bool
+    unparsable: bool
     hide_code: bool
     column: int | None
     name: str | None
@@ -251,7 +251,7 @@ class CellPlan:
             display_output=should_display_output(config),
             execute=should_execute(config),
             disabled=as_bool(config.get("disabled")),
-            unparseable=as_bool(config.get("unparseable")),
+            unparsable=as_bool(config.get("unparsable")),
             hide_code=as_bool(config.get("hide_code")),
             column=as_int(config.get("column")),
             name=str(config["name"]) if config.get("name") else None,
@@ -265,8 +265,8 @@ class CellPlan:
         message = None
         if self.disabled:
             message = "disabled"
-        elif self.unparseable:
-            message = "unparseable"
+        elif self.unparsable:
+            message = "unparsable"
         return output_model(
             visible_code_html(self.original_code, self.language, message)
             if self.display_code

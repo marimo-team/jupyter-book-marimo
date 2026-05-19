@@ -47,7 +47,7 @@ mo.md("show source and output")
 | `:hide-code:`   | `false` | force source code hidden                      |
 | `:hide-output:` | `false` | force output hidden                           |
 | `:disabled:`    | `false` | skip execution                                |
-| `:unparseable:` | `false` | mark intentionally invalid source             |
+| `:unparsable:`  | `false` | mark intentionally invalid source             |
 | `:name:`        | none    | optional cell name metadata                   |
 | `:column:`      | none    | optional column metadata                      |
 

@@ -35,7 +35,7 @@ CANONICAL_OPTION_KEYS = {
     "hide-code",
     "hide-output",
     "disabled",
-    "unparseable",
+    "unparsable",
     "name",
     "column",
 }
@@ -105,7 +105,7 @@ def should_execute(config: ExecutionOptions) -> bool:
     return (
         as_bool(config.get("eval"), True)
         and not as_bool(config.get("disabled"))
-        and not as_bool(config.get("unparseable"))
+        and not as_bool(config.get("unparsable"))
     )
 
 

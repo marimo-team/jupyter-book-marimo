@@ -101,7 +101,7 @@ mo.md("hello")
 
 Supported languages are exactly `python`, `sql`, and `markdown`. Options use
 MyST directive syntax: `eval`, `echo`, `editor`, `hide-code`, `hide-output`,
-`output`, `error`, `warning`, `disabled`, `unparseable`, `include`, `name`, and
+`output`, `error`, `warning`, `disabled`, `unparsable`, `include`, `name`, and
 `column`. SQL-specific options are `query` for the output variable and `engine`
 for the marimo SQL engine object. There are no aliases or compatibility
 spellings in the v1 API.

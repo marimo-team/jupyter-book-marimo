@@ -150,14 +150,14 @@ and on notebook save, will annotate the cell for you:
 
 ````md
 ```{marimo} python
-:unparseable: true
+:unparsable: true
 
 print("This code cell has a syntax error"
 ```
 ````
 
 ```{marimo} python
-:unparseable: true
+:unparsable: true
 
 print("This code cell has a syntax error"
 ```

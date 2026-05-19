@@ -41,11 +41,9 @@ def test_include_controls_rendering_not_execution() -> None:
     assert should_display_output(config) is False
 
 
-def test_disabled_and_unparseable_skip_execution() -> None:
+def test_disabled_and_unparsable_skip_execution() -> None:
     assert should_execute(resolved_execution_options({}, {"disabled": True})) is False
-    assert (
-        should_execute(resolved_execution_options({}, {"unparseable": True})) is False
-    )
+    assert should_execute(resolved_execution_options({}, {"unparsable": True})) is False
 
 
 def test_echo_and_editor_are_visible_code_requests() -> None:

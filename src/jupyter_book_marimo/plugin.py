@@ -63,7 +63,7 @@ PLUGIN_SPEC = {
                 "hide-code": BOOLEAN_OPTION,
                 "hide-output": BOOLEAN_OPTION,
                 "disabled": BOOLEAN_OPTION,
-                "unparseable": BOOLEAN_OPTION,
+                "unparsable": BOOLEAN_OPTION,
                 "name": STRING_OPTION,
                 "column": NUMBER_OPTION,
             },
