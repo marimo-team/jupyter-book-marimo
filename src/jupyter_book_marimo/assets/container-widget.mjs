@@ -535,6 +535,9 @@ var hasOnlyDisplayRuntimeElements = (node) => {
 };
 var canUsePendingPreview = (node) => {
   if (node.matches("marimo-anywidget")) return false;
+  if (node.matches("marimo-table") || node.querySelector("marimo-table")) {
+    return false;
+  }
   if (!node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
     return !node.querySelector(runtimeElementSelector);
   }

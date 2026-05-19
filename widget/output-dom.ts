@@ -124,6 +124,9 @@ const canUsePendingPreview = (node: Element): boolean => {
    * server DOM is not meaningful until marimo recreates it.
    */
   if (node.matches("marimo-anywidget")) return false;
+  if (node.matches("marimo-table") || node.querySelector("marimo-table")) {
+    return false;
+  }
   if (!node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
     return !node.querySelector(runtimeElementSelector);
   }
