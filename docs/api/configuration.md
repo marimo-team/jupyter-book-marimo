@@ -4,8 +4,8 @@ title: Page configuration
 
 # Page configuration
 
-Use one `{marimo-config}` directive per page to set page-level defaults and dependency
-metadata.
+Use one `{marimo-config}` directive per page to set page-level defaults, dependency
+metadata, and Molab export behavior.
 
 ````markdown
 ```{marimo-config}
@@ -16,20 +16,25 @@ metadata.
 ```
 ````
 
-Cell options override page defaults.
+Cell options override page defaults. A page may contain at most one `{marimo-config}`
+directive; unknown options fail the build.
 
-| Option           | Meaning                                        |
-| ---------------- | ---------------------------------------------- |
-| `:eval:`         | default cell execution behavior                |
-| `:echo:`         | default source visibility                      |
-| `:editor:`       | default editor visibility                      |
-| `:output:`       | default output visibility                      |
-| `:error:`        | default error handling                         |
-| `:include:`      | default page inclusion                         |
-| `:header:`       | Python inserted before exported notebook code  |
-| `:molab:`        | page-level Molab launch behavior               |
-| `:pyproject:`    | dependencies for `uv run`                      |
-| `:external-env:` | declare the default current Python environment |
+| Option           | Type    | Default | Behavior                                       |
+| ---------------- | ------- | ------- | ---------------------------------------------- |
+| `:eval:`         | boolean | `true`  | default cell execution behavior                |
+| `:echo:`         | boolean | `false` | default source visibility                      |
+| `:editor:`       | boolean | `false` | default editor visibility                      |
+| `:output:`       | boolean | `true`  | default output visibility                      |
+| `:error:`        | boolean | `true`  | default build behavior for marimo errors       |
+| `:include:`      | boolean | `true`  | default page inclusion                         |
+| `:header:`       | string  | none    | Python inserted before exported notebook code  |
+| `:molab:`        | boolean | `true`  | page-level Molab launch behavior               |
+| `:pyproject:`    | string  | none    | dependencies for `uv run`                      |
+| `:external-env:` | boolean | `false` | declare the default current Python environment |
+
+Cell-only options such as `:hide-code:`, `:hide-output:`, `:disabled:`, `:unparsable:`,
+`:query:`, and `:engine:` are not accepted in `{marimo-config}`. Put those on individual
+`{marimo}` cells.
 
 ## Molab launcher
 
@@ -65,7 +70,7 @@ Declare dependencies with `:pyproject:`:
 ````
 
 Pages with `:pyproject:` run through `uv` using marimo's sandbox metadata parsing. Pages
-without `:pyproject:` already execute in the current Python process.
+without `:pyproject:` execute in the current Python process.
 
 Use `:external-env: true` only when you want to declare that default explicitly.
 `:external-env:` and `:pyproject:` are mutually exclusive.

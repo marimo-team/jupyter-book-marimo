@@ -1,4 +1,4 @@
-"""Validate MyST-native marimo directives into executable cell models."""
+"""Parse the public MyST directive surface into executable marimo cell models."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ CONFLICTING_OPTION_KEYS = (
 
 
 def pyproject_to_script_metadata(pyproject: str) -> str:
-    """Lift document pyproject metadata into marimo's script metadata form."""
+    """Wrap page TOML in the script metadata form consumed by marimo."""
     body = dedent(pyproject).strip()
     if not body:
         return ""
@@ -86,7 +86,6 @@ def as_bool(value: Any, default: bool = False) -> bool:
 
 
 def normalized_options(options: dict[str, Any]) -> ExecutionOptions:
-    """Normalize canonical MyST option spelling at the plugin boundary."""
     return {internal_key(key): value for key, value in options.items()}
 
 
@@ -94,7 +93,6 @@ def resolved_execution_options(
     document_options: dict[str, Any],
     cell_options: dict[str, Any] | None = None,
 ) -> ExecutionOptions:
-    """Layer cell options over document options over the shared defaults."""
     return {
         **DEFAULT_EXECUTION_OPTIONS,
         **normalized_options(document_options),
@@ -196,7 +194,7 @@ def _normalize_cell_options(options: dict[str, Any], language: str) -> CellOptio
 
 
 def cell_from_directive(data: dict[str, Any]) -> Cell:
-    """Convert parsed MyST directive data into an executable marimo cell."""
+    """Enforce the v1 authoring contract for one `{marimo}` directive."""
     language = str(data.get("arg") or "").strip().lower()
     if language not in SUPPORTED_LANGUAGES:
         supported = ", ".join(sorted(SUPPORTED_LANGUAGES))
@@ -213,7 +211,7 @@ def cell_from_directive(data: dict[str, Any]) -> Cell:
 
 
 def config_from_directive(data: dict[str, Any]) -> dict[str, Any]:
-    """Convert parsed MyST directive data into page-level marimo config."""
+    """Validate the single page-level `{marimo-config}` directive."""
     options = _directive_options(data)
     _reject_unknown_options(options, CONFIG_OPTION_KEYS, directive="marimo-config")
     _reject_conflicts(options)

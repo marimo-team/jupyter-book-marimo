@@ -1,11 +1,12 @@
 # jupyter-book-marimo
 
-`jupyter-book-marimo` is a Jupyter Book executable plugin that renders
-MyST-native marimo directives for Python, SQL, and Markdown as hydrated marimo
-islands.
+`jupyter-book-marimo` turns MyST-native `{marimo}` directives into hydrated
+marimo islands in a Jupyter Book site.
 
-Use it when you want normal MyST pages with reactive marimo cells embedded
-inside the Jupyter Book site.
+Authors write Python, SQL, or Markdown cells in normal MyST pages. During the
+book build, the executable plugin runs those cells, emits static HTML, and
+serves a same-origin anywidget bridge that lets marimo hydrate the islands in
+the browser.
 
 > [!NOTE]
 > This plugin requires `marimo>=0.23.5` and Python 3.10+.
@@ -48,6 +49,17 @@ slider
 
 ```{marimo} python
 "🏝️" * slider.value
+```
+````
+
+Set page defaults or page-local dependencies with `{marimo-config}`:
+
+````markdown
+```{marimo-config}
+:echo: true
+:pyproject: |
+  requires-python = ">=3.10"
+  dependencies = ["marimo>=0.23.5", "pandas"]
 ```
 ````
 

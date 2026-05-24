@@ -5,7 +5,7 @@ title: Authoring cells
 # Authoring cells
 
 Use the MyST directive name `marimo` and pass the cell language as the required
-argument.
+argument. The language must be exactly `python`, `sql`, or `markdown`.
 
 ````markdown
 ```{marimo} python
@@ -19,8 +19,6 @@ slider
 "🏝️" * slider.value
 ```
 ````
-
-The language argument must be `python`, `sql`, or `markdown`.
 
 ## Cell options
 
@@ -36,24 +34,28 @@ mo.md("show source and output")
 ```
 ````
 
-| Option          | Default | Meaning                                       |
-| --------------- | ------- | --------------------------------------------- |
-| `:eval:`        | `true`  | execute the cell during the book build        |
-| `:echo:`        | `false` | show the source code                          |
-| `:editor:`      | `false` | show the source in a marimo editor            |
-| `:output:`      | `true`  | include rendered output                       |
-| `:error:`       | `true`  | render marimo error output instead of failing |
-| `:include:`     | `true`  | include this cell in the page                 |
-| `:hide-code:`   | `false` | force source code hidden                      |
-| `:hide-output:` | `false` | force output hidden                           |
-| `:disabled:`    | `false` | skip execution                                |
-| `:unparsable:`  | `false` | mark intentionally invalid source             |
-| `:name:`        | none    | optional cell name metadata                   |
-| `:column:`      | none    | optional column metadata                      |
+| Option          | Type    | Default | Behavior                                      |
+| --------------- | ------- | ------- | --------------------------------------------- |
+| `:eval:`        | boolean | `true`  | execute the cell during the book build        |
+| `:echo:`        | boolean | `false` | show the source code                          |
+| `:editor:`      | boolean | `false` | show the source in a marimo editor            |
+| `:output:`      | boolean | `true`  | include rendered output                       |
+| `:error:`       | boolean | `true`  | render marimo error output instead of failing |
+| `:include:`     | boolean | `true`  | include this cell in the page                 |
+| `:hide-code:`   | boolean | `false` | force source code hidden                      |
+| `:hide-output:` | boolean | `false` | force output hidden                           |
+| `:disabled:`    | boolean | `false` | skip execution                                |
+| `:unparsable:`  | boolean | `false` | mark intentionally invalid source             |
+| `:name:`        | string  | none    | store marimo cell name metadata               |
+| `:column:`      | number  | none    | store marimo column metadata                  |
 
-Conflicting options fail the build. Do not combine `:echo: true` with
-`:hide-code: true`, `:output: true` with `:hide-output: true`, or `:eval: true` with
-`:disabled: true`.
+Unsupported options fail the build. Conflicting options also fail the build: do not
+combine `:echo: true` with `:hide-code: true`, `:output: true` with
+`:hide-output: true`, or `:eval: true` with `:disabled: true`.
+
+`:error: false` is build-strict. If marimo execution produces an error MIME renderer,
+the build fails at that cell; otherwise any allowed error MIME nodes are stripped from
+the rendered output.
 
 ## SQL cells
 
@@ -71,12 +73,13 @@ WHERE value > 10
 
 SQL-only options:
 
-| Option     | Meaning                                 |
-| ---------- | --------------------------------------- |
-| `:query:`  | Python variable name for the SQL result |
-| `:engine:` | Python expression naming the SQL engine |
+| Option     | Type   | Default | Behavior                                       |
+| ---------- | ------ | ------- | ---------------------------------------------- |
+| `:query:`  | string | `_df`   | Python variable name for the SQL result        |
+| `:engine:` | string | none    | Python expression naming the marimo SQL engine |
 
-`query` and `engine` are only valid on SQL cells.
+`query` and `engine` are only valid on SQL cells. Invalid `query` names fall back to
+`_df`, matching the plugin's safe default for SQL output.
 
 ## Markdown cells
 

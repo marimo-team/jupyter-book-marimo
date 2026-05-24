@@ -502,7 +502,7 @@ def build_export_notebook_code(
     cell_prefix: str | None = None,
     header: str = "",
 ) -> str:
-    """Export notebook code plus page header and sandbox metadata."""
+    """Add page header/script metadata to marimo's exported notebook source."""
     notebook_code = AppFileManager.from_app(generator._app).to_code()
     if cell_prefix is not None:
         notebook_code = install_browser_cell_prefix(notebook_code, cell_prefix)
@@ -750,8 +750,8 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
         plan = pending.plan
         html_output = use_browser_cell_index(pending.stub.render(), cell_index)
         if not as_bool(plan.config.get("error"), True):
-            # `error: false` is build-strict: fail on real execution errors,
-            # otherwise strip rendered error MIME nodes from allowed outputs.
+            # `error: false` is build-strict only for actual execution errors.
+            # Non-error outputs can still contain stale error MIME nodes.
             if did_error and has_error_mimetype(html_output):
                 location = (
                     f"{filename}:{plan.start_line}" if plan.start_line else filename

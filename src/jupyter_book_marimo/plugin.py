@@ -328,7 +328,7 @@ def output_node(
     custom_stylesheets: list[str] | None = None,
     custom_style_blocks: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Return an anywidget node for one extractor output."""
+    """Build the MyST anywidget node that carries one extractor output."""
     if not isinstance(output, dict) or not isinstance(output.get("html"), str):
         digest = hashlib.sha1(source.encode("utf-8")).hexdigest()[:8]
         raise RuntimeError(f"Missing marimo output {index} ({digest})")
@@ -440,7 +440,7 @@ def transform_document(
 
 
 def declare_result(content: Any) -> None:
-    """Emit MyST executable-plugin JSON and stop the CLI cleanly."""
+    """Keep the executable-plugin protocol to one JSON value on stdout."""
     json.dump(content, sys.stdout)
     raise SystemExit(0)
 
