@@ -3,7 +3,7 @@ WIDGET_SRC_DIR := widget
 WIDGET_ENTRY := $(WIDGET_SRC_DIR)/container-widget.ts
 WIDGET_BUNDLE := src/jupyter_book_marimo/assets/container-widget.mjs
 
-.PHONY: format format-check lint typecheck docs-format docs-format-check widget-format widget-format-check widget-lint widget-typecheck widget-build widget-build-check test check build book-build book-start clean
+.PHONY: format format-check lint typecheck docs-format docs-format-check widget-format widget-format-check widget-lint widget-typecheck widget-test widget-build widget-build-check test check build book-build book-start clean
 
 format:
 	uv run ruff format src tests scripts
@@ -41,6 +41,9 @@ widget-lint:
 widget-typecheck:
 	uv run deno task widget:check
 
+widget-test:
+	uv run deno task widget:test
+
 widget-build:
 	uv run python scripts/bundle_widget.py
 
@@ -56,6 +59,7 @@ widget-build-check:
 
 test:
 	uv run pytest tests
+	uv run deno task widget:test
 
 check: format-check lint typecheck test build
 
