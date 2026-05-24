@@ -37,13 +37,17 @@ def marimo_node(
     value: str = "x = 1",
     options: dict[str, object] | None = None,
     line: int = 3,
+    end_line: int | None = None,
 ) -> dict[str, object]:
+    position: dict[str, object] = {"start": {"line": line}}
+    if end_line is not None:
+        position["end"] = {"line": end_line}
     return {
         "type": "marimoCell",
         "language": "python",
         "value": value,
         "options": {"language": "python", **(options or {})},
-        "position": {"start": {"line": line}},
+        "position": position,
     }
 
 
@@ -73,6 +77,7 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
         {
             "options": {
                 "header": "import marimo as mo",
+                "molab": False,
                 "pyproject": 'dependencies = ["marimo>=0.23.5"]',
             },
             "node": {"position": {"start": {"line": 1}}},
@@ -83,6 +88,7 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
         "type": "marimoConfig",
         "options": {
             "header": "import marimo as mo",
+            "molab": False,
             "pyproject": 'dependencies = ["marimo>=0.23.5"]',
         },
         "position": {"start": {"line": 1}},
@@ -96,6 +102,7 @@ def test_transform_replaces_marimo_nodes_and_removes_config() -> None:
             {
                 "type": "marimoConfig",
                 "options": {"header": "import marimo as mo"},
+                "position": {"start": {"line": 1}, "end": {"line": 3}},
             },
             marimo_node("x = 1"),
         ],
@@ -111,6 +118,9 @@ def test_transform_replaces_marimo_nodes_and_removes_config() -> None:
     assert result["children"][0]["type"] == "anywidget"
     assert run_extractor.call_args.args[0]["metadata"] == {
         "header": "import marimo as mo"
+    }
+    assert run_extractor.call_args.args[0]["sourceRanges"] == {
+        "config": [{"startLine": 1, "endLine": 3}]
     }
     assert run_extractor.call_args.args[0]["cells"][0]["code"] == "x = 1"
 
@@ -206,6 +216,31 @@ def test_source_path_locator_preserves_page_identity(
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
 
     assert source_path_for_cells([Cell("x = 1", {})]) == page
+
+
+def test_transform_payload_includes_resolved_page_source(
+    tmp_path: Path, monkeypatch
+) -> None:
+    page = tmp_path / "page.md"
+    source = "# Page\n\nIntro markdown.\n\n```{marimo} python\nx = 1\n```\n"
+    page.write_text(source, encoding="utf-8")
+    tree = {"type": "root", "children": [marimo_node("x = 1", line=5, end_line=7)]}
+    payloads: list[dict[str, object]] = []
+
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.side_effect = lambda payload: (
+            payloads.append(payload)
+            or {"outputs": [{"html": "<marimo-island></marimo-island>"}]}
+        )
+        transform_document(tree)
+
+    assert payloads[0]["file"] == str(page)
+    assert payloads[0]["identity"] == "page.md"
+    assert payloads[0]["source"] == source
+    assert payloads[0]["cells"][0]["startLine"] == 5
+    assert payloads[0]["cells"][0]["endLine"] == 7
+    assert payloads[0]["sourceRanges"] == {"config": []}
 
 
 def test_source_path_locator_falls_back_when_source_is_ambiguous(

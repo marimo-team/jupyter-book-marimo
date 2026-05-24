@@ -85,6 +85,7 @@ PLUGIN_SPEC = {
                 "editor": BOOLEAN_OPTION,
                 "external-env": BOOLEAN_OPTION,
                 "header": STRING_OPTION,
+                "molab": BOOLEAN_OPTION,
                 "pyproject": STRING_OPTION,
             },
         },
@@ -111,6 +112,7 @@ class CollectedDocument:
     source_path: Path | None
     indexed_cells: list[CollectedCell]
     config_node_ids: set[int]
+    config_ranges: list[dict[str, int]]
 
     @property
     def cells(self) -> list[Cell]:
@@ -121,9 +123,10 @@ class CollectedDocument:
         return {
             "file": str(self.source_path or synthetic_filename(cells)),
             "identity": source_identity(self.source_path, cells),
-            "source": "",
+            "source": source_text(self.source_path),
             "metadata": self.metadata,
-            "cells": [cell.payload() for cell in cells],
+            "cells": [cell_payload(cell) for cell in cells],
+            "sourceRanges": {"config": self.config_ranges},
         }
 
 
@@ -194,6 +197,32 @@ def source_identity(path: Path | None, cells: list[Cell]) -> str:
         return str(path.relative_to(Path.cwd()))
     except ValueError:
         return str(path)
+
+
+def source_text(path: Path | None) -> str:
+    if path is None:
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def source_range(position: dict[str, Any] | None) -> dict[str, int] | None:
+    if position is None:
+        return None
+    start_line = (position.get("start") or {}).get("line")
+    end_line = (position.get("end") or {}).get("line")
+    if isinstance(start_line, int) and isinstance(end_line, int):
+        return {"startLine": start_line, "endLine": end_line}
+    return None
+
+
+def cell_payload(cell: Cell) -> dict[str, Any]:
+    payload = cell.payload()
+    if (cell_range := source_range(cell.position)) is not None:
+        payload.update(cell_range)
+    return payload
 
 
 def safe_asset_stem(path: Path) -> str:
@@ -324,6 +353,7 @@ def collect_document(
     cells: list[CollectedCell] = []
     config: dict[str, Any] = {}
     config_node_ids: set[int] = set()
+    config_ranges: list[dict[str, int]] = []
 
     def visit(node: dict[str, Any]) -> None:
         if node.get("type") == MARIMO_CONFIG_NODE:
@@ -331,6 +361,10 @@ def collect_document(
                 raise ValueError("Only one marimo-config directive is allowed per page")
             config.update(dict(node.get("options") or {}))
             config_node_ids.add(id(node))
+            position = node.get("position")
+            if isinstance(position, dict):
+                if (config_range := source_range(position)) is not None:
+                    config_ranges.append(config_range)
 
         cell = cell_from_node(node)
         if cell is not None:
@@ -346,6 +380,7 @@ def collect_document(
         source_path_for_cells([item.cell for item in cells]),
         cells,
         config_node_ids,
+        config_ranges,
     )
 
 

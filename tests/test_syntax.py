@@ -84,6 +84,7 @@ def test_marimo_config_directive_uses_canonical_options() -> None:
                 "eval": False,
                 "external-env": True,
                 "header": "import marimo as mo",
+                "molab": False,
             },
         }
     )
@@ -92,6 +93,7 @@ def test_marimo_config_directive_uses_canonical_options() -> None:
         "eval": False,
         "external_env": True,
         "header": "import marimo as mo",
+        "molab": False,
     }
 
 

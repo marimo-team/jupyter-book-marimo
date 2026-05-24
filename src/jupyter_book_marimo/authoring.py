@@ -44,6 +44,7 @@ CONFIG_OPTION_KEYS = {
     *DEFAULT_EXECUTION_OPTIONS,
     "external-env",
     "header",
+    "molab",
     "pyproject",
 }
 

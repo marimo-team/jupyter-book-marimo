@@ -27,8 +27,27 @@ Cell options override page defaults.
 | `:error:`        | default error handling                         |
 | `:include:`      | default page inclusion                         |
 | `:header:`       | Python inserted before exported notebook code  |
+| `:molab:`        | page-level Molab launch behavior               |
 | `:pyproject:`    | dependencies for `uv run`                      |
 | `:external-env:` | declare the default current Python environment |
+
+## Molab launcher
+
+Pages show a Molab launcher by default when they contain included marimo output. The
+launcher opens an external Molab page with notebook source generated from the current
+page, including surrounding Markdown and executable `{marimo}` directive source.
+
+Set `:molab: false` to hide the launcher for a page:
+
+````markdown
+```{marimo-config}
+:molab: false
+```
+````
+
+The generated Molab notebook source is separate from the in-page output source. It is
+attached to the first included marimo output on the page so the external launcher can
+open the authored page content, not just the rendered cell result.
 
 ## Page-local dependencies
 

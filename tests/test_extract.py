@@ -23,15 +23,61 @@ def test_output_model_includes_page_runtime_fields() -> None:
         "<marimo-island></marimo-island>",
         app_id="jb-test",
         notebook_code="app code",
+        molab_notebook_code="molab app code",
         assets={"moduleScripts": ["/runtime.js"], "links": []},
         suppress_mimetypes={"application/vnd.marimo+error"},
     ) == {
         "html": "<marimo-island></marimo-island>",
         "appId": "jb-test",
         "notebookCode": "app code",
+        "molabNotebookCode": "molab app code",
         "assets": {"moduleScripts": ["/runtime.js"], "links": []},
         "suppressMimetypes": ["application/vnd.marimo+error"],
     }
+
+
+def test_widget_config_from_metadata_emits_molab_settings() -> None:
+    assert extract.widget_config_from_metadata({}) == {"molab": {"enabled": True}}
+    assert extract.widget_config_from_metadata({"molab": False}) == {
+        "molab": {"enabled": False}
+    }
+    assert extract.widget_config_from_metadata({"molab": True}) == {
+        "molab": {"enabled": True}
+    }
+
+
+def test_extract_attaches_widget_config_to_python_output_models() -> None:
+    result = asyncio.run(
+        extract.extract(
+            {
+                "file": "docs/tutorials/test.md",
+                "metadata": {"eval": False, "molab": False},
+                "cells": [{"code": "x = 1"}],
+            }
+        )
+    )
+
+    assert result["outputs"] == [
+        {"html": "", "widgetConfig": {"molab": {"enabled": False}}}
+    ]
+
+
+def cell_plan(
+    code: str,
+    *,
+    options: dict[str, object] | None = None,
+    start_line: int | None = None,
+    end_line: int | None = None,
+) -> extract.CellPlan:
+    payload: dict[str, object] = {
+        "code": code,
+        "options": {"language": "python", **(options or {})},
+    }
+    if start_line is not None:
+        payload["startLine"] = start_line
+    if end_line is not None:
+        payload["endLine"] = end_line
+    return extract.CellPlan.from_payload(0, payload, {})
 
 
 def test_suppress_mime_renderers_removes_selected_marimo_mime_output() -> None:
@@ -76,6 +122,106 @@ def test_suppress_mime_renderers_matches_data_mime_not_payload_text() -> None:
 
 def test_source_for_plain_python_cell_is_passthrough() -> None:
     assert extract.source_for_cell({"code": "x = 1"}) == "x = 1"
+
+
+def test_molab_source_cells_interleave_page_markdown_and_directives() -> None:
+    source = """---
+title: Demo
+---
+
+# Demo page
+
+Intro **markdown** before the first cell.
+
+```{marimo-config}
+---
+eval: true
+---
+```
+
+```{marimo} python
+x = 1
+```
+
+Markdown after the cell.
+"""
+
+    sources = extract.molab_source_cells_from_page_source(
+        source,
+        [cell_plan("x = 1", start_line=15, end_line=17)],
+        [extract.LineRange(9, 13)],
+    )
+    joined = "\n\n".join(sources)
+
+    assert len(sources) == 3
+    assert "title: Demo" not in joined
+    assert "marimo-config" not in joined
+    assert "Intro **markdown** before the first cell." in sources[0]
+    assert "import marimo as _mo" in sources[0]
+    assert sources[1] == "x = 1"
+    assert "Markdown after the cell." in sources[2]
+
+
+def test_molab_source_cells_preserve_literal_marimo_fences_before_real_cell() -> None:
+    source = """---
+title: Demo
+---
+
+# Demo page
+
+````markdown
+```{marimo} python
+not_executed = True
+```
+````
+
+```{marimo-config}
+---
+eval: true
+---
+```
+
+Intro before the executable cell.
+
+```{marimo} python
+value = 41
+```
+
+Markdown after the cell.
+"""
+
+    sources = extract.molab_source_cells_from_page_source(
+        source,
+        [cell_plan("value = 41", start_line=21, end_line=23)],
+        [extract.LineRange(13, 17)],
+    )
+    joined = "\n\n".join(sources)
+
+    assert "not_executed = True" in joined
+    assert "marimo-config" not in joined
+    assert sources.count("value = 41") == 1
+    assert "Intro before the executable cell." in joined
+    assert "Markdown after the cell." in joined
+
+
+def test_molab_source_cells_preserve_non_executed_cells_as_markdown() -> None:
+    sources = extract.molab_source_cells_from_page_source(
+        "",
+        [cell_plan("print('broken'", options={"unparsable": True, "echo": True})],
+    )
+
+    assert len(sources) == 1
+    assert "import marimo as _mo" in sources[0]
+    assert "```python\\nprint('broken'\\n```" in sources[0]
+
+
+def test_molab_source_cells_fall_back_to_planned_cells_without_source_ranges() -> None:
+    sources = extract.molab_source_cells_from_page_source(
+        "# Page markdown that cannot be safely aligned\n",
+        [cell_plan("value = 41")],
+    )
+
+    assert sources == ["value = 41"]
 
 
 def test_source_for_sql_cell_uses_inferred_language() -> None:
@@ -211,7 +357,9 @@ def test_include_false_renders_intentionally_empty_output() -> None:
         )
     )
 
-    assert result["outputs"] == [{"html": ""}]
+    assert result["outputs"] == [
+        {"html": "", "widgetConfig": {"molab": {"enabled": True}}}
+    ]
 
 
 def test_include_false_still_executes_for_later_cells() -> None:
@@ -241,7 +389,10 @@ def test_include_false_still_executes_for_later_cells() -> None:
             )
         )
 
-    assert result["outputs"][0] == {"html": ""}
+    assert result["outputs"][0] == {
+        "html": "",
+        "widgetConfig": {"molab": {"enabled": True}},
+    }
     assert "42" in result["outputs"][1]["html"]
     assert 'data-cell-idx="1"' in result["outputs"][1]["html"]
 
@@ -427,9 +578,86 @@ def test_extract_emits_runtime_fields_once_for_executable_cells() -> None:
         f'CellManager(prefix="{extract.page_cell_prefix("docs/tutorials/test.md")}")'
         in result["outputs"][0]["notebookCode"]
     )
+    assert "CellManager(prefix=" not in result["outputs"][0]["molabNotebookCode"]
     assert result["outputs"][0]["assets"]["moduleScripts"]
     assert "notebookCode" not in result["outputs"][1]
     assert "assets" not in result["outputs"][1]
     for output in result["outputs"]:
         assert "data-cell-idx" in output["html"]
         assert 'data-cell-id="' not in output["html"]
+
+
+def test_extract_attaches_molab_notebook_code_with_page_markdown() -> None:
+    page_source = """---
+title: Demo
+---
+
+# Demo page
+
+This prose should open in Molab too.
+
+```{marimo-config}
+---
+eval: true
+---
+```
+
+```{marimo} python
+value = 41
+```
+
+More markdown after the executable cell.
+"""
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=ResourceWarning,
+            module=r"marimo\._session\.session",
+        )
+        result = asyncio.run(
+            extract.extract(
+                {
+                    "file": "docs/tutorials/test.md",
+                    "identity": "docs/tutorials/test.md",
+                    "source": page_source,
+                    "sourceRanges": {"config": [{"startLine": 9, "endLine": 13}]},
+                    "metadata": {},
+                    "cells": [{"code": "value = 41", "startLine": 15, "endLine": 17}],
+                }
+            )
+        )
+
+    output = result["outputs"][0]
+    molab_code = output["molabNotebookCode"]
+
+    assert "notebookCode" in output
+    assert "This prose should open in Molab too." not in output["notebookCode"]
+    assert "This prose should open in Molab too." in molab_code
+    assert "More markdown after the executable cell." in molab_code
+    assert "value = 41" in molab_code
+    assert "marimo-config" not in molab_code
+
+
+def test_extract_attaches_molab_notebook_code_without_page_source() -> None:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=ResourceWarning,
+            module=r"marimo\._session\.session",
+        )
+        result = asyncio.run(
+            extract.extract(
+                {
+                    "file": "docs/tutorials/test.md",
+                    "identity": "docs/tutorials/test.md",
+                    "metadata": {},
+                    "cells": [{"code": "value = 41"}],
+                }
+            )
+        )
+
+    output = result["outputs"][0]
+
+    assert "molabNotebookCode" in output
+    assert "value = 41" in output["molabNotebookCode"]

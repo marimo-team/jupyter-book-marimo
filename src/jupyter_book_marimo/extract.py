@@ -159,6 +159,20 @@ def source_for_cell(cell: dict[str, Any]) -> str:
     return code
 
 
+def markdown_source_for_molab(markdown: str) -> str | None:
+    content = markdown.strip()
+    if not content:
+        return None
+    return (
+        "import marimo as _mo\n\n_mo.md("
+        + json.dumps(
+            content,
+            ensure_ascii=False,
+        )
+        + ")"
+    )
+
+
 def visible_code_html(code: str, language: str, message: str | None = None) -> str:
     escaped = html.escape(code)
     note = (
@@ -193,6 +207,7 @@ def output_model(
     *,
     app_id: str = "",
     notebook_code: str = "",
+    molab_notebook_code: str = "",
     assets: dict[str, Any] | None = None,
     suppress_mimetypes: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -201,11 +216,17 @@ def output_model(
         model["appId"] = app_id
     if notebook_code:
         model["notebookCode"] = notebook_code
+    if molab_notebook_code:
+        model["molabNotebookCode"] = molab_notebook_code
     if assets:
         model["assets"] = assets
     if suppress_mimetypes:
         model["suppressMimetypes"] = sorted(suppress_mimetypes)
     return model
+
+
+def widget_config_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {"molab": {"enabled": as_bool(metadata.get("molab"), default=True)}}
 
 
 @dataclass(frozen=True)
@@ -214,6 +235,7 @@ class CellPlan:
 
     index: int
     start_line: int | None
+    end_line: int | None
     config: ExecutionOptions
     language: str
     original_code: str
@@ -239,9 +261,11 @@ class CellPlan:
         config = resolved_execution_options(document_options, options)
         language = str(options.get("language") or "python").lower()
         start_line = cell.get("startLine")
+        end_line = cell.get("endLine")
         return cls(
             index=index,
             start_line=start_line if isinstance(start_line, int) else None,
+            end_line=end_line if isinstance(end_line, int) else None,
             config=config,
             language=language,
             original_code=str(cell.get("code") or ""),
@@ -282,6 +306,41 @@ class CellPlan:
                 "could not compile",
             )
         )
+
+    @property
+    def source_range(self) -> "LineRange | None":
+        if self.start_line is None or self.end_line is None:
+            return None
+        return LineRange(self.start_line, self.end_line)
+
+    def molab_source(self) -> str | None:
+        if self.execute:
+            return self.executable_source
+        if not self.display_code:
+            return None
+        return markdown_source_for_molab(
+            f"```{self.language}\n{self.original_code}\n```"
+        )
+
+
+@dataclass(frozen=True)
+class LineRange:
+    start_line: int
+    end_line: int
+
+    @property
+    def start_index(self) -> int:
+        return self.start_line - 1
+
+    @property
+    def end_index(self) -> int:
+        return self.end_line
+
+
+@dataclass(frozen=True)
+class MolabSourceReplacement:
+    line_range: LineRange
+    source: str | None
 
 
 @dataclass(frozen=True)
@@ -337,16 +396,116 @@ def page_cell_prefix(filename: str) -> str:
     return f"jb{page_digest(filename)}"
 
 
+def line_range_from_payload(value: Any) -> LineRange | None:
+    if not isinstance(value, dict):
+        return None
+    start_line = value.get("startLine")
+    end_line = value.get("endLine")
+    if not isinstance(start_line, int) or not isinstance(end_line, int):
+        return None
+    return LineRange(start_line, end_line)
+
+
+def source_ranges_from_payload(payload: dict[str, Any]) -> list[LineRange]:
+    source_ranges = payload.get("sourceRanges") or {}
+    if not isinstance(source_ranges, dict):
+        return []
+    config_ranges = source_ranges.get("config") or []
+    if not isinstance(config_ranges, list):
+        return []
+    return [
+        line_range
+        for item in config_ranges
+        if (line_range := line_range_from_payload(item)) is not None
+    ]
+
+
+def frontmatter_end_index(lines: list[str]) -> int:
+    if not lines or lines[0].strip() != "---":
+        return 0
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() in {"---", "..."}:
+            return index + 1
+    return 0
+
+
+def molab_source_cells_from_plans(plans: list[CellPlan]) -> list[str]:
+    return [source for plan in plans if (source := plan.molab_source()) is not None]
+
+
+def molab_source_replacements(
+    plans: list[CellPlan],
+    config_ranges: list[LineRange],
+) -> list[MolabSourceReplacement] | None:
+    replacements: list[MolabSourceReplacement] = [
+        MolabSourceReplacement(line_range, None) for line_range in config_ranges
+    ]
+    for plan in plans:
+        line_range = plan.source_range
+        if line_range is None:
+            return None
+        replacements.append(MolabSourceReplacement(line_range, plan.molab_source()))
+
+    replacements.sort(key=lambda replacement: replacement.line_range.start_line)
+    previous_end = 0
+    for replacement in replacements:
+        if (
+            replacement.line_range.start_line < 1
+            or replacement.line_range.end_line < replacement.line_range.start_line
+            or replacement.line_range.start_index < previous_end
+        ):
+            return None
+        previous_end = replacement.line_range.end_index
+    return replacements
+
+
+def molab_source_cells_from_page_source(
+    source: str,
+    plans: list[CellPlan],
+    config_ranges: list[LineRange] | None = None,
+) -> list[str]:
+    """Interleave page markdown with parsed cell plans without reparsing fences."""
+    fallback = molab_source_cells_from_plans(plans)
+    if not source.strip():
+        return fallback
+
+    replacements = molab_source_replacements(plans, config_ranges or [])
+    if replacements is None:
+        return fallback
+
+    lines = source.splitlines(keepends=True)
+    sources: list[str] = []
+    cursor = frontmatter_end_index(lines)
+    for replacement in replacements:
+        start_index = replacement.line_range.start_index
+        end_index = replacement.line_range.end_index
+        if start_index < cursor or end_index > len(lines):
+            return fallback
+
+        markdown_source = markdown_source_for_molab("".join(lines[cursor:start_index]))
+        if markdown_source is not None:
+            sources.append(markdown_source)
+        if replacement.source is not None:
+            sources.append(replacement.source)
+        cursor = end_index
+
+    markdown_source = markdown_source_for_molab("".join(lines[cursor:]))
+    if markdown_source is not None:
+        sources.append(markdown_source)
+    return sources
+
+
 def build_export_notebook_code(
     generator: MarimoIslandGenerator,
     pyproject: str,
     *,
-    cell_prefix: str,
+    cell_prefix: str | None = None,
     header: str = "",
 ) -> str:
     """Export notebook code plus page header and sandbox metadata."""
     notebook_code = AppFileManager.from_app(generator._app).to_code()
-    notebook_code = install_browser_cell_prefix(notebook_code, cell_prefix)
+    if cell_prefix is not None:
+        notebook_code = install_browser_cell_prefix(notebook_code, cell_prefix)
     header = dedent(header).strip()
     script_metadata = pyproject_to_script_metadata(pyproject)
     if header:
@@ -354,6 +513,35 @@ def build_export_notebook_code(
     if script_metadata:
         notebook_code = f"{script_metadata}{notebook_code}"
     return notebook_code
+
+
+def build_molab_notebook_code(
+    source: str,
+    plans: list[CellPlan],
+    *,
+    identity: str,
+    config_ranges: list[LineRange] | None = None,
+    pyproject: str = "",
+    header: str = "",
+) -> str:
+    generator = MarimoIslandGenerator(app_id="molab-" + page_digest(identity))
+    for source_cell in molab_source_cells_from_page_source(
+        source,
+        plans,
+        config_ranges,
+    ):
+        generator.add_code(
+            source_cell,
+            display_code=True,
+            display_output=True,
+            is_reactive=True,
+            is_raw=True,
+        )
+    return build_export_notebook_code(
+        generator,
+        pyproject,
+        header=header,
+    )
 
 
 def install_browser_cell_prefix(notebook_code: str, cell_prefix: str) -> str:
@@ -488,7 +676,10 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     cells = payload.get("cells") or []
     filename = str(payload.get("file") or "")
     identity = str(payload.get("identity") or filename)
+    source = str(payload.get("source") or "")
     document_options = metadata if isinstance(metadata, dict) else {}
+    config_ranges = source_ranges_from_payload(payload)
+    widget_config = widget_config_from_metadata(document_options)
     app_id = "jb-" + page_digest(identity)
     generator = MarimoIslandGenerator(app_id=app_id)
     # Keep server-side IDs in the same namespace the browser runtime will use
@@ -496,9 +687,11 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     generator._app._app._cell_manager = CellManager(prefix=page_cell_prefix(identity))
     outputs: list[dict[str, Any] | None] = []
     pending_outputs: list[PendingCellOutput] = []
+    plans: list[CellPlan] = []
 
     for index, cell in enumerate(cells):
         plan = CellPlan.from_payload(index, cell, document_options)
+        plans.append(plan)
         if plan.skip_without_execution:
             outputs.append(output_model(""))
             continue
@@ -532,10 +725,19 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             cell_prefix=page_cell_prefix(identity),
             header=str(metadata.get("header") or ""),
         )
+        molab_notebook_code = build_molab_notebook_code(
+            source,
+            plans,
+            identity=identity,
+            config_ranges=config_ranges,
+            pyproject=str(metadata.get("pyproject") or ""),
+            header=str(metadata.get("header") or ""),
+        )
         assets = render_assets(generator)
     else:
         did_error = False
         notebook_code = ""
+        molab_notebook_code = ""
         assets = {}
 
     # Only the first included island carries notebook code and runtime assets;
@@ -564,6 +766,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             html_output,
             app_id=app_id,
             notebook_code=notebook_code if has_runtime_payload else "",
+            molab_notebook_code=molab_notebook_code if has_runtime_payload else "",
             assets=assets if has_runtime_payload else None,
         )
 
@@ -571,7 +774,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     for output in outputs:
         if output is None:
             raise RuntimeError("internal error: marimo output was not rendered")
-        final_outputs.append(output)
+        final_outputs.append({**output, "widgetConfig": widget_config})
 
     return {
         "cells": [
