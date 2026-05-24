@@ -4,9 +4,9 @@
 marimo islands in a Jupyter Book site.
 
 Authors write Python, SQL, or Markdown cells in normal MyST pages. During the
-book build, the executable plugin runs those cells, emits static HTML, and
-serves a same-origin anywidget bridge that lets marimo hydrate the islands in
-the browser.
+book build, the executable plugin runs those cells and emits static HTML. In
+the browser, marimo hydrates the outputs so controls, tables, plots, SQL
+results, and dependent cells stay reactive.
 
 > [!NOTE]
 > This plugin requires `marimo>=0.23.5` and Python 3.10+.

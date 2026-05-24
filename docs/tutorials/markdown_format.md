@@ -1,5 +1,5 @@
 ---
-title: Markdown
+title: Markdown file format
 ---
 
 ```{marimo-config}
@@ -54,8 +54,8 @@ $ marimo export md notebook.py > notebook.md
 
 ## Creating Python cells
 
-When you do need to create a Python cell in this book, use the `{marimo}` directive with
-the `python` language:
+This book uses the `{marimo}` directive with the `python` language for runnable Python
+cells:
 
 ````md
 ```{marimo} python
@@ -73,8 +73,7 @@ plt.plot([1, 2, 3, 4])
 plt.gca()
 ```
 
-Only the documented directive form is executable here. Plain language fences remain
-normal code blocks.
+Plain language fences remain normal code blocks.
 
 ## `mo` tricks and tips
 

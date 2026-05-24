@@ -17,9 +17,8 @@ pyproject: |
 
 # Loading Custom Packages
 
-By default, `jupyter-book-marimo` creates a sandboxed Python environment with `uv`. To
-add a package for one document, declare it in a `{marimo-config}` directive with
-`pyproject`.
+This page uses a page-local dependency so the published example can import `wigglystuff`
+without requiring it from every page in the book.
 
 ````markdown
 ```{marimo-config}
@@ -34,9 +33,9 @@ pyproject: |
 ```
 ````
 
-After that, you can import the package normally inside marimo cells. If the package
-exposes an anywidget, wrap it with `mo.ui.anywidget` so marimo can keep the UI reactive
-in Jupyter Book output.
+After the page declares the dependency, marimo cells can import it normally. If the
+package exposes an anywidget, wrap it with `mo.ui.anywidget` so marimo can keep the UI
+reactive in Jupyter Book output.
 
 ## Example: `wigglystuff.Slider2D`
 

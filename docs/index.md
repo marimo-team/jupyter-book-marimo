@@ -1,14 +1,14 @@
 ---
-title: Jupyter Book + marimo = 🏝️❤️📖
+title: jupyter-book-marimo
 ---
 
 ```{marimo-config}
 :header: # Copyright 2026 Marimo. All rights reserved
 ```
 
-`jupyter-book-marimo` adds reactive marimo cells to Jupyter Book.
+Reactive marimo cells for Jupyter Book.
 
-## Try it
+## Example
 
 This page is static HTML with live marimo islands. The Python cell ran during the book
 build; the slider and output still update after the page is served.
@@ -26,6 +26,13 @@ demo_count
 mo.md(f"Static HTML, live islands: {'🏝️' * demo_count.value}")
 ```
 
+## What's going on
+
+The two cells above are ordinary MyST `{marimo}` directives. At build time,
+`jupyter-book-marimo` executes them with marimo and writes the rendered output into the
+book. In the browser, marimo hydrates the same islands so the slider can still update
+the dependent Markdown output.
+
 ## Quickstart
 
 Install the package:
@@ -33,11 +40,6 @@ Install the package:
 ```bash
 pip install jupyter-book-marimo
 ```
-
-Add the executable plugin to `myst.yml`, write `{marimo}` cells in MyST Markdown, and
-build your book as usual. At build time, `jupyter-book-marimo` executes the marimo cells
-and emits static HTML. In the browser, marimo hydrates those islands so sliders, tables,
-plots, SQL results, and dependent outputs stay reactive.
 
 Register the plugin:
 
@@ -74,9 +76,6 @@ jupyter-book build --html
 ## Next steps
 
 - [Get started](api/install.md) with installation and `myst.yml` setup.
-- Use the [reference](api/index.md) for cell syntax, page configuration, styling, and
-  runtime assets.
+- Use the [reference](api/index.md) for directive syntax, page configuration, styling,
+  and runtime assets.
 - Open the [tutorials](tutorials/index.md) for marimo examples in a Jupyter Book.
-
-Use this for runnable documentation examples, reactive controls, plots, SQL results, and
-page-local dependencies inside Jupyter Book.

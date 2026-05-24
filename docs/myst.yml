@@ -44,6 +44,7 @@ project:
         - file: tutorials/external_dependencies.md
         - file: tutorials/sql.md
         - file: tutorials/markdown_format.md
+          title: Markdown file format
         - file: tutorials/for_jupyter_users.md
 
 site:
