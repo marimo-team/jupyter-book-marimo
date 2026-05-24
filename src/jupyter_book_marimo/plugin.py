@@ -22,6 +22,9 @@ from .authoring import (
     Cell,
     MARIMO_CELL_NODE,
     MARIMO_CONFIG_NODE,
+    MARIMO_CONFIG_OPTION_SPECS,
+    MARIMO_DIRECTIVE_OPTION_SPECS,
+    SUPPORTED_LANGUAGES,
     cell_from_directive,
     cell_from_node,
     config_from_directive,
@@ -36,10 +39,6 @@ WIDGET_CLASS = "marimo-jupyter-book-widget"
 CONTAINER_WIDGET = "container-widget.mjs"
 GENERATED_DIR = ".jupyter-book-marimo"
 
-BOOLEAN_OPTION = {"type": "boolean"}
-STRING_OPTION = {"type": "string"}
-NUMBER_OPTION = {"type": "number"}
-
 PLUGIN_SPEC = {
     "name": "Jupyter Book marimo",
     "directives": [
@@ -49,24 +48,9 @@ PLUGIN_SPEC = {
             "arg": {
                 "type": "string",
                 "required": True,
-                "doc": "Cell language: python, sql, or markdown.",
+                "doc": "Cell language: " + ", ".join(sorted(SUPPORTED_LANGUAGES)) + ".",
             },
-            "options": {
-                "eval": BOOLEAN_OPTION,
-                "echo": BOOLEAN_OPTION,
-                "output": BOOLEAN_OPTION,
-                "error": BOOLEAN_OPTION,
-                "include": BOOLEAN_OPTION,
-                "editor": BOOLEAN_OPTION,
-                "query": STRING_OPTION,
-                "engine": STRING_OPTION,
-                "hide-code": BOOLEAN_OPTION,
-                "hide-output": BOOLEAN_OPTION,
-                "disabled": BOOLEAN_OPTION,
-                "unparsable": BOOLEAN_OPTION,
-                "name": STRING_OPTION,
-                "column": NUMBER_OPTION,
-            },
+            "options": MARIMO_DIRECTIVE_OPTION_SPECS,
             "body": {
                 "type": "string",
                 "required": True,
@@ -76,18 +60,7 @@ PLUGIN_SPEC = {
         {
             "name": MARIMO_CONFIG_DIRECTIVE,
             "doc": "Configure marimo execution for the current page.",
-            "options": {
-                "eval": BOOLEAN_OPTION,
-                "echo": BOOLEAN_OPTION,
-                "output": BOOLEAN_OPTION,
-                "error": BOOLEAN_OPTION,
-                "include": BOOLEAN_OPTION,
-                "editor": BOOLEAN_OPTION,
-                "external-env": BOOLEAN_OPTION,
-                "header": STRING_OPTION,
-                "molab": BOOLEAN_OPTION,
-                "pyproject": STRING_OPTION,
-            },
+            "options": MARIMO_CONFIG_OPTION_SPECS,
         },
     ],
     "transforms": [

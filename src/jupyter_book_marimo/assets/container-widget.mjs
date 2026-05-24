@@ -26,9 +26,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../../Library/Caches/deno/npm/registry.npmjs.org/lz-string/1.5.0/libs/lz-string.js
+// npm:lz-string@1.5.0/libs/lz-string.js
 var require_lz_string = __commonJS({
-  "../../../../Library/Caches/deno/npm/registry.npmjs.org/lz-string/1.5.0/libs/lz-string.js"(exports, module) {
+  "npm:lz-string@1.5.0/libs/lz-string.js"(exports, module) {
     var LZString = function() {
       var f = String.fromCharCode;
       var keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -604,6 +604,7 @@ var readOutputModel = (model) => {
     body,
     notebookCode,
     molabNotebookCode: getModelString(model, "molabNotebookCode"),
+    molabSourceFallbackReason: getModelString(model, "molabSourceFallbackReason"),
     appId: getModelString(model, "appId") || appIdFrom(body, notebookCode),
     assets: assetsFromModel(model, head),
     customStylesheets: getModelStringList(model, "customStylesheets"),
@@ -1582,14 +1583,15 @@ var renderIcon = (link, doc) => {
 var insertMolabAction = (badges, link) => {
   badges.insertBefore(link, badges.firstChild);
 };
-var upsertMolabAction = (header, href) => {
+var upsertMolabAction = (header, href, sourceStatus) => {
   const doc = header.ownerDocument;
   const link = header.querySelector(ACTION_SELECTOR) ?? doc.createElement("a");
   link.href = href;
   link.dataset.jupyterBookMarimoMolabAction = "true";
   link.dataset.jupyterBookMarimoMolabHref = href;
-  link.title = "Open in molab";
-  link.ariaLabel = "Open in molab";
+  link.dataset.jupyterBookMarimoMolabSource = sourceStatus;
+  link.title = sourceStatus === "complete" ? "Open in molab" : "Open in molab (cell-only fallback)";
+  link.ariaLabel = link.title;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.className = "myst-fm-molab-link text-inherit hover:text-inherit";
@@ -1601,7 +1603,7 @@ var upsertMolabAction = (header, href) => {
   }
   return link;
 };
-function ensureMolabPageAction({ notebookCodeSource, target = document, baseUrl = MOLAB_BASE_URL }) {
+function ensureMolabPageAction({ notebookCodeSource, fallbackReason = "", target = document, baseUrl = MOLAB_BASE_URL }) {
   const notebookCode = notebookCodeSource();
   if (!notebookCode || !notebookCode.trim()) return () => {
   };
@@ -1611,11 +1613,12 @@ function ensureMolabPageAction({ notebookCodeSource, target = document, baseUrl 
   const doc = ownerDocumentFor(target);
   ensureMolabActionStyle(doc);
   const href = createMolabUrl(notebookCode, baseUrl);
+  const sourceStatus = fallbackReason ? `fallback:${fallbackReason}` : "complete";
   const existing = molabPageActions.get(doc);
   if (existing?.link.isConnected) {
     existing.uses += 1;
     if (existing.href !== href) {
-      existing.link = upsertMolabAction(header, href);
+      existing.link = upsertMolabAction(header, href, sourceStatus);
       existing.href = href;
     }
     return () => {
@@ -1626,7 +1629,7 @@ function ensureMolabPageAction({ notebookCodeSource, target = document, baseUrl 
       }
     };
   }
-  const link = upsertMolabAction(header, href);
+  const link = upsertMolabAction(header, href, sourceStatus);
   const action = {
     href,
     link,
@@ -1690,6 +1693,7 @@ var mountMarimo = (model, el) => {
         if (output.widgetConfig.molab.enabled) {
           releaseMolabAction = ensureMolabPageAction({
             notebookCodeSource,
+            fallbackReason: output.molabSourceFallbackReason,
             baseUrl: output.widgetConfig.molab.baseUrl
           });
         }

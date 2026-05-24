@@ -21,6 +21,7 @@ export type OutputModel = {
   body: DocumentFragment;
   notebookCode: string;
   molabNotebookCode: string;
+  molabSourceFallbackReason: string;
   appId: string;
   assets: RuntimeAssets;
   customStylesheets: string[];
@@ -229,6 +230,10 @@ export const readOutputModel = (model: AnyWidgetModel | unknown): OutputModel =>
     body,
     notebookCode,
     molabNotebookCode: getModelString(model, "molabNotebookCode"),
+    molabSourceFallbackReason: getModelString(
+      model,
+      "molabSourceFallbackReason",
+    ),
     appId: getModelString(model, "appId") || appIdFrom(body, notebookCode),
     assets: assetsFromModel(model, head),
     customStylesheets: getModelStringList(model, "customStylesheets"),

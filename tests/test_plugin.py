@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -25,6 +26,16 @@ WIDGET_SOURCE_DIR = REPO_ROOT / "widget"
 WIDGET_ENTRY = WIDGET_SOURCE_DIR / "container-widget.ts"
 WIDGET_BUNDLE = REPO_ROOT / "src/jupyter_book_marimo/assets/container-widget.mjs"
 WIDGET_BUNDLE_SCRIPT = REPO_ROOT / "scripts" / "bundle_widget.py"
+
+_bundle_widget_spec = importlib.util.spec_from_file_location(
+    "bundle_widget",
+    WIDGET_BUNDLE_SCRIPT,
+)
+assert _bundle_widget_spec is not None
+_bundle_widget = importlib.util.module_from_spec(_bundle_widget_spec)
+assert _bundle_widget_spec.loader is not None
+_bundle_widget_spec.loader.exec_module(_bundle_widget)
+normalize_bundle = _bundle_widget.normalize_bundle
 
 
 def marimo_node(
@@ -72,7 +83,7 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
             "options": {
                 "header": "import marimo as mo",
                 "molab": False,
-                "pyproject": 'dependencies = ["marimo>=0.23.5"]',
+                "pyproject": 'dependencies = ["marimo>=0.23.5,<0.24"]',
             },
             "node": {"position": {"start": {"line": 1}}},
         },
@@ -83,7 +94,7 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
         "options": {
             "header": "import marimo as mo",
             "molab": False,
-            "pyproject": 'dependencies = ["marimo>=0.23.5"]',
+            "pyproject": 'dependencies = ["marimo>=0.23.5,<0.24"]',
         },
         "position": {"start": {"line": 1}},
     }
@@ -342,6 +353,22 @@ def test_container_widget_bundle_is_current(tmp_path: Path) -> None:
     assert generated.read_text() == WIDGET_BUNDLE.read_text()
 
 
+def test_widget_bundle_normalization_removes_local_deno_cache_paths() -> None:
+    bundle = """
+// ../../../../Library/Caches/deno/npm/registry.npmjs.org/lz-string/1.5.0/libs/lz-string.js
+var require_lz_string = __commonJS({
+  "../../../../Library/Caches/deno/npm/registry.npmjs.org/lz-string/1.5.0/libs/lz-string.js"(exports, module) {
+  }
+});
+"""
+
+    normalized = normalize_bundle(bundle)
+
+    assert "Library/Caches/deno" not in normalized
+    assert "// npm:lz-string@1.5.0/libs/lz-string.js" in normalized
+    assert '"npm:lz-string@1.5.0/libs/lz-string.js"' in normalized
+
+
 def test_plugin_spec_includes_directives() -> None:
     result = subprocess.run(
         ["uv", "run", "jupyter-book-marimo"],
@@ -356,3 +383,9 @@ def test_plugin_spec_includes_directives() -> None:
         "marimo",
         "marimo-config",
     ]
+    marimo_options = spec["directives"][0]["options"]
+    config_options = spec["directives"][1]["options"]
+    assert "warning" not in marimo_options
+    assert "warning" not in config_options
+    assert marimo_options["hide-code"]["type"] == "boolean"
+    assert config_options["pyproject"]["type"] == "string"

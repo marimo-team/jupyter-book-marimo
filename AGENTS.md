@@ -101,10 +101,10 @@ mo.md("hello")
 
 Supported languages are exactly `python`, `sql`, and `markdown`. Options use
 MyST directive syntax: `eval`, `echo`, `editor`, `hide-code`, `hide-output`,
-`output`, `error`, `warning`, `disabled`, `unparsable`, `include`, `name`, and
-`column`. SQL-specific options are `query` for the output variable and `engine`
-for the marimo SQL engine object. There are no aliases or compatibility
-spellings in the v1 API.
+`output`, `error`, `disabled`, `unparsable`, `include`, `name`, and `column`.
+SQL-specific options are `query` for the output variable and `engine` for the
+marimo SQL engine object. There are no aliases or compatibility spellings in the
+v1 API.
 
 Page-level metadata is written in a `{marimo-config}` directive:
 
@@ -118,7 +118,7 @@ output: true
 error: true
 pyproject: |
   requires-python = ">=3.10"
-  dependencies = ["pandas", "marimo>=0.23.5"]
+  dependencies = ["pandas", "marimo>=0.23.5,<0.24"]
 ---
 ```
 ````

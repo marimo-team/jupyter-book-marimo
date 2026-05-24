@@ -24,6 +24,7 @@ type MolabPageAction = {
   link: HTMLAnchorElement;
   uses: number;
 };
+type MolabSourceStatus = "complete" | `fallback:${string}`;
 
 type ExportContextWindow = Window & {
   __MARIMO_EXPORT_CONTEXT__?: {
@@ -160,6 +161,7 @@ const insertMolabAction = (
 const upsertMolabAction = (
   header: HTMLElement,
   href: string,
+  sourceStatus: MolabSourceStatus,
 ): HTMLAnchorElement => {
   const doc = header.ownerDocument;
   const link = header.querySelector<HTMLAnchorElement>(ACTION_SELECTOR) ??
@@ -168,8 +170,11 @@ const upsertMolabAction = (
   link.href = href;
   link.dataset.jupyterBookMarimoMolabAction = "true";
   link.dataset.jupyterBookMarimoMolabHref = href;
-  link.title = "Open in molab";
-  link.ariaLabel = "Open in molab";
+  link.dataset.jupyterBookMarimoMolabSource = sourceStatus;
+  link.title = sourceStatus === "complete"
+    ? "Open in molab"
+    : "Open in molab (cell-only fallback)";
+  link.ariaLabel = link.title;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.className = "myst-fm-molab-link text-inherit hover:text-inherit";
@@ -185,10 +190,12 @@ const upsertMolabAction = (
 
 export function ensureMolabPageAction({
   notebookCodeSource,
+  fallbackReason = "",
   target = document,
   baseUrl = MOLAB_BASE_URL,
 }: {
   notebookCodeSource: NotebookCodeSource;
+  fallbackReason?: string;
   target?: MolabActionTarget;
   baseUrl?: string;
 }): Release {
@@ -201,11 +208,14 @@ export function ensureMolabPageAction({
   const doc = ownerDocumentFor(target);
   ensureMolabActionStyle(doc);
   const href = createMolabUrl(notebookCode, baseUrl);
+  const sourceStatus: MolabSourceStatus = fallbackReason
+    ? `fallback:${fallbackReason}`
+    : "complete";
   const existing = molabPageActions.get(doc);
   if (existing?.link.isConnected) {
     existing.uses += 1;
     if (existing.href !== href) {
-      existing.link = upsertMolabAction(header, href);
+      existing.link = upsertMolabAction(header, href, sourceStatus);
       existing.href = href;
     }
     return () => {
@@ -217,7 +227,7 @@ export function ensureMolabPageAction({
     };
   }
 
-  const link = upsertMolabAction(header, href);
+  const link = upsertMolabAction(header, href, sourceStatus);
   const action: MolabPageAction = { href, link, uses: 1 };
   molabPageActions.set(doc, action);
 

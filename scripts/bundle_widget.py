@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -17,12 +18,30 @@ BANNER = "\n".join(
     ]
 )
 
+NPM_CACHE_MODULE_RE = re.compile(
+    r"(?P<prefix>(?:// |[\"']))[^\n\"']*"
+    r"npm/registry\.npmjs\.org/(?P<package>[^/]+)/(?P<version>[^/]+)/"
+    r"(?P<path>[^\"'\n]+)"
+)
+
 
 def resolve_output(argv: list[str]) -> Path:
     if not argv:
         return DEFAULT_OUTPUT
     output = Path(argv[0])
     return output if output.is_absolute() else REPO_ROOT / output
+
+
+def normalize_bundle(bundle: str) -> str:
+    """Remove local Deno cache paths from bundled npm module identifiers."""
+
+    def replace(match: re.Match[str]) -> str:
+        package = match.group("package")
+        version = match.group("version")
+        path = match.group("path")
+        return f"{match.group('prefix')}npm:{package}@{version}/{path}"
+
+    return NPM_CACHE_MODULE_RE.sub(replace, bundle)
 
 
 def main(argv: list[str]) -> int:
@@ -47,7 +66,7 @@ def main(argv: list[str]) -> int:
         sys.stderr.write(result.stderr)
         return result.returncode
 
-    output.write_text(f"{BANNER}{result.stdout}", encoding="utf-8")
+    output.write_text(f"{BANNER}{normalize_bundle(result.stdout)}", encoding="utf-8")
     return 0
 
 

@@ -24,6 +24,7 @@ def test_output_model_includes_page_runtime_fields() -> None:
         app_id="jb-test",
         notebook_code="app code",
         molab_notebook_code="molab app code",
+        molab_source_fallback_reason="empty_page_source",
         assets={"moduleScripts": ["/runtime.js"], "links": []},
         suppress_mimetypes={"application/vnd.marimo+error"},
     ) == {
@@ -31,6 +32,7 @@ def test_output_model_includes_page_runtime_fields() -> None:
         "appId": "jb-test",
         "notebookCode": "app code",
         "molabNotebookCode": "molab app code",
+        "molabSourceFallbackReason": "empty_page_source",
         "assets": {"moduleScripts": ["/runtime.js"], "links": []},
         "suppressMimetypes": ["application/vnd.marimo+error"],
     }
@@ -216,12 +218,31 @@ def test_molab_source_cells_preserve_non_executed_cells_as_markdown() -> None:
 
 
 def test_molab_source_cells_fall_back_to_planned_cells_without_source_ranges() -> None:
-    sources = extract.molab_source_cells_from_page_source(
+    assembly = extract.assemble_molab_source_cells(
         "# Page markdown that cannot be safely aligned\n",
         [cell_plan("value = 41")],
     )
 
+    assert assembly.fallback_reason == "missing_source_ranges"
+    assert not assembly.used_page_source
+    assert assembly.source_cells == ("value = 41",)
+
+    sources = extract.molab_source_cells_from_page_source(
+        "# Page markdown that cannot be safely aligned\n",
+        [cell_plan("value = 41")],
+    )
     assert sources == ["value = 41"]
+
+
+def test_molab_source_assembly_reports_out_of_bounds_source_fallback() -> None:
+    assembly = extract.assemble_molab_source_cells(
+        "# Short page\n",
+        [cell_plan("value = 41", start_line=10, end_line=12)],
+    )
+
+    assert assembly.fallback_reason == "out_of_bounds_source_ranges"
+    assert not assembly.used_page_source
+    assert assembly.source_cells == ("value = 41",)
 
 
 def test_source_for_sql_cell_uses_inferred_language() -> None:
@@ -448,8 +469,8 @@ def test_as_bool_defaults_missing_values() -> None:
 
 def test_pyproject_to_script_metadata_wraps_toml() -> None:
     assert (
-        extract.pyproject_to_script_metadata('dependencies = ["marimo>=0.23.5"]')
-        == '# /// script\n# dependencies = ["marimo>=0.23.5"]\n# ///\n'
+        extract.pyproject_to_script_metadata('dependencies = ["marimo>=0.23.5,<0.24"]')
+        == '# /// script\n# dependencies = ["marimo>=0.23.5,<0.24"]\n# ///\n'
     )
 
 
@@ -661,3 +682,4 @@ def test_extract_attaches_molab_notebook_code_without_page_source() -> None:
 
     assert "molabNotebookCode" in output
     assert "value = 41" in output["molabNotebookCode"]
+    assert output["molabSourceFallbackReason"] == "empty_page_source"

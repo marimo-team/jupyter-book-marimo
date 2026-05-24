@@ -41,6 +41,15 @@ from .authoring import (
     should_include,
     pyproject_to_script_metadata,
 )
+from .molab import (
+    LineRange,
+    MolabSourceAssembly,
+    MolabSourceReplacement,
+    MolabSourceSegment,
+    assemble_molab_source_cells as assemble_molab_source_segments,
+    markdown_source_for_molab,
+    molab_source_replacement_plan as plan_molab_source_replacements,
+)
 
 MIN_MARIMO_VERSION = "0.23.5"
 ERROR_MIMETYPES = {
@@ -159,20 +168,6 @@ def source_for_cell(cell: dict[str, Any]) -> str:
     return code
 
 
-def markdown_source_for_molab(markdown: str) -> str | None:
-    content = markdown.strip()
-    if not content:
-        return None
-    return (
-        "import marimo as _mo\n\n_mo.md("
-        + json.dumps(
-            content,
-            ensure_ascii=False,
-        )
-        + ")"
-    )
-
-
 def visible_code_html(code: str, language: str, message: str | None = None) -> str:
     escaped = html.escape(code)
     note = (
@@ -208,6 +203,7 @@ def output_model(
     app_id: str = "",
     notebook_code: str = "",
     molab_notebook_code: str = "",
+    molab_source_fallback_reason: str = "",
     assets: dict[str, Any] | None = None,
     suppress_mimetypes: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -218,6 +214,8 @@ def output_model(
         model["notebookCode"] = notebook_code
     if molab_notebook_code:
         model["molabNotebookCode"] = molab_notebook_code
+    if molab_source_fallback_reason:
+        model["molabSourceFallbackReason"] = molab_source_fallback_reason
     if assets:
         model["assets"] = assets
     if suppress_mimetypes:
@@ -324,29 +322,15 @@ class CellPlan:
 
 
 @dataclass(frozen=True)
-class LineRange:
-    start_line: int
-    end_line: int
-
-    @property
-    def start_index(self) -> int:
-        return self.start_line - 1
-
-    @property
-    def end_index(self) -> int:
-        return self.end_line
-
-
-@dataclass(frozen=True)
-class MolabSourceReplacement:
-    line_range: LineRange
-    source: str | None
-
-
-@dataclass(frozen=True)
 class PendingCellOutput:
     plan: CellPlan
     stub: Any
+
+
+@dataclass(frozen=True)
+class MolabNotebookExport:
+    code: str
+    source_assembly: MolabSourceAssembly
 
 
 def normalized_mimetype(value: str) -> str:
@@ -420,43 +404,43 @@ def source_ranges_from_payload(payload: dict[str, Any]) -> list[LineRange]:
     ]
 
 
-def frontmatter_end_index(lines: list[str]) -> int:
-    if not lines or lines[0].strip() != "---":
-        return 0
-    for index, line in enumerate(lines[1:], start=1):
-        if line.strip() in {"---", "..."}:
-            return index + 1
-    return 0
+def molab_source_segments_from_plans(plans: list[CellPlan]) -> list[MolabSourceSegment]:
+    return [
+        MolabSourceSegment(plan.source_range, plan.molab_source()) for plan in plans
+    ]
 
 
 def molab_source_cells_from_plans(plans: list[CellPlan]) -> list[str]:
-    return [source for plan in plans if (source := plan.molab_source()) is not None]
+    return [
+        segment.source
+        for segment in molab_source_segments_from_plans(plans)
+        if segment.source is not None
+    ]
 
 
 def molab_source_replacements(
     plans: list[CellPlan],
     config_ranges: list[LineRange],
 ) -> list[MolabSourceReplacement] | None:
-    replacements: list[MolabSourceReplacement] = [
-        MolabSourceReplacement(line_range, None) for line_range in config_ranges
-    ]
-    for plan in plans:
-        line_range = plan.source_range
-        if line_range is None:
-            return None
-        replacements.append(MolabSourceReplacement(line_range, plan.molab_source()))
+    replacement_plan = plan_molab_source_replacements(
+        molab_source_segments_from_plans(plans),
+        config_ranges,
+    )
+    if replacement_plan.fallback_reason is not None:
+        return None
+    return list(replacement_plan.replacements)
 
-    replacements.sort(key=lambda replacement: replacement.line_range.start_line)
-    previous_end = 0
-    for replacement in replacements:
-        if (
-            replacement.line_range.start_line < 1
-            or replacement.line_range.end_line < replacement.line_range.start_line
-            or replacement.line_range.start_index < previous_end
-        ):
-            return None
-        previous_end = replacement.line_range.end_index
-    return replacements
+
+def assemble_molab_source_cells(
+    source: str,
+    plans: list[CellPlan],
+    config_ranges: list[LineRange] | None = None,
+) -> MolabSourceAssembly:
+    return assemble_molab_source_segments(
+        source,
+        molab_source_segments_from_plans(plans),
+        config_ranges,
+    )
 
 
 def molab_source_cells_from_page_source(
@@ -464,35 +448,13 @@ def molab_source_cells_from_page_source(
     plans: list[CellPlan],
     config_ranges: list[LineRange] | None = None,
 ) -> list[str]:
-    """Interleave page markdown with parsed cell plans without reparsing fences."""
-    fallback = molab_source_cells_from_plans(plans)
-    if not source.strip():
-        return fallback
-
-    replacements = molab_source_replacements(plans, config_ranges or [])
-    if replacements is None:
-        return fallback
-
-    lines = source.splitlines(keepends=True)
-    sources: list[str] = []
-    cursor = frontmatter_end_index(lines)
-    for replacement in replacements:
-        start_index = replacement.line_range.start_index
-        end_index = replacement.line_range.end_index
-        if start_index < cursor or end_index > len(lines):
-            return fallback
-
-        markdown_source = markdown_source_for_molab("".join(lines[cursor:start_index]))
-        if markdown_source is not None:
-            sources.append(markdown_source)
-        if replacement.source is not None:
-            sources.append(replacement.source)
-        cursor = end_index
-
-    markdown_source = markdown_source_for_molab("".join(lines[cursor:]))
-    if markdown_source is not None:
-        sources.append(markdown_source)
-    return sources
+    return list(
+        assemble_molab_source_cells(
+            source,
+            plans,
+            config_ranges,
+        ).source_cells
+    )
 
 
 def build_export_notebook_code(
@@ -515,6 +477,39 @@ def build_export_notebook_code(
     return notebook_code
 
 
+def build_molab_notebook_export(
+    source: str,
+    plans: list[CellPlan],
+    *,
+    identity: str,
+    config_ranges: list[LineRange] | None = None,
+    pyproject: str = "",
+    header: str = "",
+) -> MolabNotebookExport:
+    generator = MarimoIslandGenerator(app_id="molab-" + page_digest(identity))
+    source_assembly = assemble_molab_source_cells(
+        source,
+        plans,
+        config_ranges,
+    )
+    for source_cell in source_assembly.source_cells:
+        generator.add_code(
+            source_cell,
+            display_code=True,
+            display_output=True,
+            is_reactive=True,
+            is_raw=True,
+        )
+    return MolabNotebookExport(
+        build_export_notebook_code(
+            generator,
+            pyproject,
+            header=header,
+        ),
+        source_assembly,
+    )
+
+
 def build_molab_notebook_code(
     source: str,
     plans: list[CellPlan],
@@ -524,24 +519,14 @@ def build_molab_notebook_code(
     pyproject: str = "",
     header: str = "",
 ) -> str:
-    generator = MarimoIslandGenerator(app_id="molab-" + page_digest(identity))
-    for source_cell in molab_source_cells_from_page_source(
+    return build_molab_notebook_export(
         source,
         plans,
-        config_ranges,
-    ):
-        generator.add_code(
-            source_cell,
-            display_code=True,
-            display_output=True,
-            is_reactive=True,
-            is_raw=True,
-        )
-    return build_export_notebook_code(
-        generator,
-        pyproject,
+        identity=identity,
+        config_ranges=config_ranges,
+        pyproject=pyproject,
         header=header,
-    )
+    ).code
 
 
 def install_browser_cell_prefix(notebook_code: str, cell_prefix: str) -> str:
@@ -725,7 +710,7 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             cell_prefix=page_cell_prefix(identity),
             header=str(metadata.get("header") or ""),
         )
-        molab_notebook_code = build_molab_notebook_code(
+        molab_export = build_molab_notebook_export(
             source,
             plans,
             identity=identity,
@@ -733,11 +718,16 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             pyproject=str(metadata.get("pyproject") or ""),
             header=str(metadata.get("header") or ""),
         )
+        molab_notebook_code = molab_export.code
+        molab_source_fallback_reason = (
+            molab_export.source_assembly.fallback_reason or ""
+        )
         assets = render_assets(generator)
     else:
         did_error = False
         notebook_code = ""
         molab_notebook_code = ""
+        molab_source_fallback_reason = ""
         assets = {}
 
     # Only the first included island carries notebook code and runtime assets;
@@ -767,6 +757,9 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
             app_id=app_id,
             notebook_code=notebook_code if has_runtime_payload else "",
             molab_notebook_code=molab_notebook_code if has_runtime_payload else "",
+            molab_source_fallback_reason=molab_source_fallback_reason
+            if has_runtime_payload
+            else "",
             assets=assets if has_runtime_payload else None,
         )
 

@@ -101,6 +101,7 @@ const mountMarimo = (
         if (output.widgetConfig.molab.enabled) {
           releaseMolabAction = ensureMolabPageAction({
             notebookCodeSource,
+            fallbackReason: output.molabSourceFallbackReason,
             baseUrl: output.widgetConfig.molab.baseUrl,
           });
         }

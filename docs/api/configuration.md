@@ -40,7 +40,11 @@ Cell-only options such as `:hide-code:`, `:hide-output:`, `:disabled:`, `:unpars
 
 Pages show a Molab launcher by default when they contain included marimo output. The
 launcher opens an external Molab page with notebook source generated from the current
-page, including surrounding Markdown and executable `{marimo}` directive source.
+page, including surrounding Markdown and executable `{marimo}` directive source when the
+plugin can identify and align the source page unambiguously. If Jupyter Book does not
+expose a unique source page, or if source line ranges cannot be aligned safely, the
+launcher falls back to the executable marimo cells and records the fallback reason in
+the widget model.
 
 Set `:molab: false` to hide the launcher for a page:
 
@@ -64,7 +68,7 @@ Declare dependencies with `:pyproject:`:
   requires-python = ">=3.10"
   dependencies = [
       "pandas",
-      "marimo>=0.23.5",
+      "marimo>=0.23.5,<0.24",
   ]
 ```
 ````

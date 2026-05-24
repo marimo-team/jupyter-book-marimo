@@ -23,30 +23,33 @@ DEFAULT_EXECUTION_OPTIONS: ExecutionOptions = {
     "editor": False,
 }
 
-CANONICAL_OPTION_KEYS = {
-    "eval",
-    "echo",
-    "output",
-    "error",
-    "include",
-    "editor",
-    "query",
-    "engine",
-    "hide-code",
-    "hide-output",
-    "disabled",
-    "unparsable",
-    "name",
-    "column",
+BOOLEAN_OPTION_SPEC = {"type": "boolean"}
+STRING_OPTION_SPEC = {"type": "string"}
+NUMBER_OPTION_SPEC = {"type": "number"}
+EXECUTION_OPTION_SPECS = {key: BOOLEAN_OPTION_SPEC for key in DEFAULT_EXECUTION_OPTIONS}
+
+MARIMO_DIRECTIVE_OPTION_SPECS = {
+    **EXECUTION_OPTION_SPECS,
+    "query": STRING_OPTION_SPEC,
+    "engine": STRING_OPTION_SPEC,
+    "hide-code": BOOLEAN_OPTION_SPEC,
+    "hide-output": BOOLEAN_OPTION_SPEC,
+    "disabled": BOOLEAN_OPTION_SPEC,
+    "unparsable": BOOLEAN_OPTION_SPEC,
+    "name": STRING_OPTION_SPEC,
+    "column": NUMBER_OPTION_SPEC,
 }
 
-CONFIG_OPTION_KEYS = {
-    *DEFAULT_EXECUTION_OPTIONS,
-    "external-env",
-    "header",
-    "molab",
-    "pyproject",
+MARIMO_CONFIG_OPTION_SPECS = {
+    **EXECUTION_OPTION_SPECS,
+    "external-env": BOOLEAN_OPTION_SPEC,
+    "header": STRING_OPTION_SPEC,
+    "molab": BOOLEAN_OPTION_SPEC,
+    "pyproject": STRING_OPTION_SPEC,
 }
+
+CANONICAL_OPTION_KEYS = set(MARIMO_DIRECTIVE_OPTION_SPECS)
+CONFIG_OPTION_KEYS = set(MARIMO_CONFIG_OPTION_SPECS)
 
 SQL_ONLY_OPTION_KEYS = {"query", "engine"}
 CONFLICTING_OPTION_KEYS = (

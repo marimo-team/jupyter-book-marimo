@@ -9,7 +9,7 @@ header: |
 pyproject: |
   requires-python = ">=3.11"
   dependencies = [
-      "marimo>=0.23.5",
+      "marimo>=0.23.5,<0.24",
       "matplotlib",
       "numpy",
       "polars",

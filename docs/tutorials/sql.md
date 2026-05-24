@@ -9,7 +9,7 @@ header: |
 pyproject: |
   requires-python = ">=3.11"
   dependencies = [
-      "marimo[sql]>=0.23.5",
+      "marimo[sql]>=0.23.5,<0.24",
       "matplotlib",
       "altair",
       "plotly",

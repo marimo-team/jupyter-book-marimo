@@ -9,7 +9,7 @@ the browser, marimo hydrates the outputs so controls, tables, plots, SQL
 results, and dependent cells stay reactive.
 
 > [!NOTE]
-> This plugin requires `marimo>=0.23.5` and Python 3.10+.
+> This plugin requires `marimo>=0.23.5,<0.24` and Python 3.10+.
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ Set page defaults or page-local dependencies with `{marimo-config}`:
 :echo: true
 :pyproject: |
   requires-python = ">=3.10"
-  dependencies = ["marimo>=0.23.5", "pandas"]
+  dependencies = ["marimo>=0.23.5,<0.24", "pandas"]
 ```
 ````
 

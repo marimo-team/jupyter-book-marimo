@@ -605,7 +605,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "marimo", specifier = ">=0.23.5" },
+    { name = "marimo", specifier = ">=0.23.5,<0.24" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
