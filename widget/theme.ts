@@ -318,16 +318,24 @@ export const scheduleShadowTheme = (
   const normalized = normalizedStylesheetHrefs(stylesheets);
   const blocks = normalizedStyleBlocks(styleBlocks);
   themedRoots.set(mount, { stylesheets: normalized, styleBlocks: blocks });
-  installShadowTheme(mount, normalized, blocks, mount);
-  requestAnimationFrame(() => installShadowTheme(mount, normalized, blocks, mount));
-  for (const delay of [100, 500, 2000, 5000]) {
-    setTimeout(() => installShadowTheme(mount, normalized, blocks, mount), delay);
-  }
-  const observer = new MutationObserver(() =>
-    installShadowTheme(mount, normalized, blocks, mount)
+
+  let released = false;
+  const installIfConnected = (): void => {
+    if (released || !mount.isConnected) return;
+    installShadowTheme(mount, normalized, blocks, mount);
+  };
+
+  installIfConnected();
+  const frame = requestAnimationFrame(installIfConnected);
+  const timeouts = [100, 500, 2000, 5000].map((delay) =>
+    setTimeout(installIfConnected, delay)
   );
+  const observer = new MutationObserver(installIfConnected);
   observer.observe(mount, { childList: true, subtree: true });
   return () => {
+    released = true;
+    cancelAnimationFrame(frame);
+    timeouts.forEach(clearTimeout);
     observer.disconnect();
     releaseShadowObservers(mount);
     themedRoots.delete(mount);

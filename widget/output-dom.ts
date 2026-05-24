@@ -135,6 +135,20 @@ const canUsePendingPreview = (node: Element): boolean => {
   return hasDisplayRuntimeElement(node) && !node.matches("marimo-ui-element");
 };
 
+type RuntimePlaceholderPolicy = "remove" | "preview" | "skeleton";
+
+const runtimePlaceholderPolicy = (node: Element): RuntimePlaceholderPolicy => {
+  /*
+   * The marimo island runtime treats server-rendered children as the cell's
+   * initial DOM. Runtime placeholders inside an island can therefore become
+   * permanent for cells whose browser output is initially empty or unchanged.
+   * Remove stale runtime elements inside islands and let the browser runtime own
+   * that cell container from an empty starting point.
+   */
+  if (node.closest("marimo-island")) return "remove";
+  return canUsePendingPreview(node) ? "preview" : "skeleton";
+};
+
 const pendingStatusNode = (): HTMLElement => {
   const node = document.createElement("div");
   node.className = pendingStatusClass;
@@ -143,18 +157,24 @@ const pendingStatusNode = (): HTMLElement => {
   return node;
 };
 
-const replaceWithPendingPreview = (node: Element): HTMLElement => {
+const replaceWithPendingPreview = (node: Element): void => {
   /*
    * Preserve static HTML as a dimmed preview only when it does not itself contain
    * live marimo runtime elements that the browser will recreate.
    */
+  const policy = runtimePlaceholderPolicy(node);
+  if (policy === "remove") {
+    node.remove();
+    return;
+  }
+
   const wrapper = document.createElement("div");
   wrapper.className = pendingClass;
   wrapper.setAttribute("aria-busy", "true");
   wrapper.setAttribute("aria-disabled", "true");
   wrapper.inert = true;
 
-  if (canUsePendingPreview(node)) {
+  if (policy === "preview") {
     const preview = document.createElement("div");
     preview.className = previewClass;
 
@@ -165,7 +185,6 @@ const replaceWithPendingPreview = (node: Element): HTMLElement => {
     wrapper.append(loadingNode());
     node.replaceWith(wrapper);
   }
-  return wrapper;
 };
 
 export const deferServerRuntimeElements = (fragment: ParentNode): void => {
@@ -197,6 +216,34 @@ const hasVisiblePreview = (wrapper: HTMLElement): boolean => {
   return rect.width > 1 && rect.height > 1;
 };
 
+const rootIsConnected = (root: ParentNode): boolean => {
+  if (root instanceof Document) return true;
+  if (root instanceof ShadowRoot) return root.host.isConnected;
+  return root instanceof Node ? root.isConnected : true;
+};
+
+const scheduleConnectedDomChecks = (
+  root: ParentNode,
+  callback: () => void,
+  delays: number[],
+): Release => {
+  let released = false;
+  const run = (): void => {
+    if (released || !rootIsConnected(root)) return;
+    callback();
+  };
+
+  run();
+  const frame = requestAnimationFrame(run);
+  const timeouts = delays.map((delay) => setTimeout(run, delay));
+
+  return () => {
+    released = true;
+    cancelAnimationFrame(frame);
+    timeouts.forEach(clearTimeout);
+  };
+};
+
 const refreshPendingPreviews = (root: ParentNode): void => {
   root.querySelectorAll(`.${pendingClass}`).forEach((wrapper) => {
     if (!(wrapper instanceof HTMLElement)) return;
@@ -208,13 +255,13 @@ const refreshPendingPreviews = (root: ParentNode): void => {
   });
 };
 
-export const schedulePendingPreviews = (root: ParentNode): void => {
+export const schedulePendingPreviews = (root: ParentNode): Release => {
   // Preview visibility can change after fonts, custom elements, or layout settle.
-  refreshPendingPreviews(root);
-  requestAnimationFrame(() => refreshPendingPreviews(root));
-  for (const delay of [100, 500, 1500, 3000]) {
-    setTimeout(() => refreshPendingPreviews(root), delay);
-  }
+  return scheduleConnectedDomChecks(
+    root,
+    () => refreshPendingPreviews(root),
+    [100, 500, 1500, 3000],
+  );
 };
 
 const cellIdFromIsland = (island: Element): string => {
@@ -249,18 +296,18 @@ export const scheduleIslandCellContainers = (root: ParentNode): Release => {
    * The browser runtime resolves `data-cell-idx` to `cellId` asynchronously.
    * Retry and observe so plugin-facing div#cell-* wrappers appear once IDs land.
    */
-  syncIslandCellContainers(root);
-
-  const frame = requestAnimationFrame(() => syncIslandCellContainers(root));
-  const timeouts = [100, 500, 1500, 3000, 5000].map((delay) =>
-    setTimeout(() => syncIslandCellContainers(root), delay)
+  const releaseSchedule = scheduleConnectedDomChecks(
+    root,
+    () => syncIslandCellContainers(root),
+    [100, 500, 1500, 3000, 5000],
   );
-  const observer = new MutationObserver(() => syncIslandCellContainers(root));
+  const observer = new MutationObserver(() => {
+    if (rootIsConnected(root)) syncIslandCellContainers(root);
+  });
   observer.observe(root, { childList: true, subtree: true });
 
   return () => {
-    cancelAnimationFrame(frame);
-    timeouts.forEach(clearTimeout);
+    releaseSchedule();
     observer.disconnect();
   };
 };

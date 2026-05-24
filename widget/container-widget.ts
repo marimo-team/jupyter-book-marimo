@@ -23,6 +23,13 @@ import {
   ensureThemeStyle,
   scheduleShadowTheme,
 } from "./theme.ts";
+import {
+  ensureMolabPageAction,
+  firstNotebookCodeSource,
+  notebookCodeFromDom,
+  notebookCodeFromExportContext,
+  notebookCodeFromValue,
+} from "./molab-action.ts";
 import type { AnyWidgetModel, Release } from "./model.ts";
 
 type RenderContext = {
@@ -47,6 +54,8 @@ const mountMarimo = (
   let releaseMimeObserver: Release = () => {};
   let releaseTheme: Release = () => {};
   let releaseCellContainers: Release = () => {};
+  let releasePendingPreviews: Release = () => {};
+  let releaseMolabAction: Release = () => {};
 
   stripHeadOnlyNodes(output.body);
   suppressMimeRenderers(output.body, output.suppressMimetypes);
@@ -60,6 +69,12 @@ const mountMarimo = (
   const hasRuntime = Boolean(output.appId) || hasRuntimePayload(output);
   const hasPayload = hasRuntimePayload(output);
   const bodyIsEmpty = isOutputBodyEmpty(output);
+  const notebookCodeSource = firstNotebookCodeSource(
+    notebookCodeFromValue(output.molabNotebookCode),
+    notebookCodeFromValue(output.notebookCode),
+    notebookCodeFromExportContext(),
+    notebookCodeFromDom(output.appId),
+  );
 
   if (!bodyIsEmpty) {
     mount.replaceChildren(output.body);
@@ -73,7 +88,7 @@ const mountMarimo = (
       output.customStyleBlocks,
     );
     releaseCellContainers = scheduleIslandCellContainers(mount);
-    schedulePendingPreviews(mount);
+    releasePendingPreviews = schedulePendingPreviews(mount);
   } else if (hasRuntime) {
     mount.replaceChildren(loadingNode());
   } else {
@@ -83,6 +98,12 @@ const mountMarimo = (
   const hydrate = async (): Promise<void> => {
     try {
       if (hasPayload) {
+        if (output.widgetConfig.molab.enabled) {
+          releaseMolabAction = ensureMolabPageAction({
+            notebookCodeSource,
+            baseUrl: output.widgetConfig.molab.baseUrl,
+          });
+        }
         releaseCode = retainNotebookCode(output.appId, output.notebookCode);
       }
 
@@ -122,6 +143,8 @@ const mountMarimo = (
     releaseMimeObserver();
     releaseTheme();
     releaseCellContainers();
+    releasePendingPreviews();
+    releaseMolabAction();
     mount.remove();
   };
 };

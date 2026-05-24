@@ -20,11 +20,13 @@ export type StyleBlock = {
 export type OutputModel = {
   body: DocumentFragment;
   notebookCode: string;
+  molabNotebookCode: string;
   appId: string;
   assets: RuntimeAssets;
   customStylesheets: string[];
   customStyleBlocks: StyleBlock[];
   suppressMimetypes: string[];
+  widgetConfig: WidgetConfig;
 };
 
 export type AppRecord = {
@@ -39,6 +41,15 @@ export type AppRecord = {
 export type ShadowStyleSet = {
   stylesheets: string[];
   styleBlocks: StyleBlock[];
+};
+
+export type MolabActionConfig = {
+  enabled: boolean;
+  baseUrl?: string;
+};
+
+export type WidgetConfig = {
+  molab: MolabActionConfig;
 };
 
 type ModelGetter = {
@@ -100,6 +111,16 @@ const getModelValue = (
 const getModelString = (model: AnyWidgetModel | unknown, key: string): string => {
   const value = getModelValue(model, key);
   return typeof value === "string" ? value : "";
+};
+
+const getBoolean = (value: unknown, fallback: boolean): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.toLowerCase() === "true";
+  return fallback;
+};
+
+const recordFrom = (value: unknown): Record<string, unknown> => {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
 };
 
 const getModelStringList = (
@@ -178,6 +199,25 @@ const assetsFromModel = (
   };
 };
 
+const molabActionConfigFromWidgetConfig = (
+  config: Record<string, unknown>,
+): MolabActionConfig => {
+  const molabConfig = recordFrom(config.molab);
+  const baseUrl = molabConfig.baseUrl;
+
+  return {
+    enabled: getBoolean(molabConfig.enabled, false),
+    ...(typeof baseUrl === "string" && baseUrl.trim() ? { baseUrl } : {}),
+  };
+};
+
+const widgetConfigFromModel = (model: AnyWidgetModel | unknown): WidgetConfig => {
+  const config = recordFrom(getModelValue(model, "widgetConfig", {}));
+  return {
+    molab: molabActionConfigFromWidgetConfig(config),
+  };
+};
+
 export const readOutputModel = (model: AnyWidgetModel | unknown): OutputModel => {
   const head = parseHtml(getModelValue(model, "head"));
   const body = parseHtml(getModelValue(model, "html"));
@@ -188,11 +228,13 @@ export const readOutputModel = (model: AnyWidgetModel | unknown): OutputModel =>
   return {
     body,
     notebookCode,
+    molabNotebookCode: getModelString(model, "molabNotebookCode"),
     appId: getModelString(model, "appId") || appIdFrom(body, notebookCode),
     assets: assetsFromModel(model, head),
     customStylesheets: getModelStringList(model, "customStylesheets"),
     customStyleBlocks: getModelStyleBlocks(model),
     suppressMimetypes: getModelStringList(model, "suppressMimetypes"),
+    widgetConfig: widgetConfigFromModel(model),
   };
 };
 
