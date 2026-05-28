@@ -17,24 +17,25 @@ metadata, and Molab export behavior.
 ````
 
 Cell options override page defaults. A page may contain at most one `{marimo-config}`
-directive; unknown options fail the build.
+directive.
 
-| Option           | Type    | Default | Behavior                                       |
-| ---------------- | ------- | ------- | ---------------------------------------------- |
-| `:eval:`         | boolean | `true`  | default cell execution behavior                |
-| `:echo:`         | boolean | `false` | default source visibility                      |
-| `:editor:`       | boolean | `false` | default editor visibility                      |
-| `:output:`       | boolean | `true`  | default output visibility                      |
-| `:error:`        | boolean | `true`  | default build behavior for marimo errors       |
-| `:include:`      | boolean | `true`  | default page inclusion                         |
-| `:header:`       | string  | none    | Python inserted before exported notebook code  |
-| `:molab:`        | boolean | `true`  | page-level Molab launch behavior               |
-| `:pyproject:`    | string  | none    | dependencies for `uv run`                      |
-| `:external-env:` | boolean | `false` | declare the default current Python environment |
+| Option            | Type    | Default | Behavior                                         |
+| ----------------- | ------- | ------- | ------------------------------------------------ |
+| `:eval:`          | boolean | `true`  | default build-time execution                     |
+| `:echo:`          | boolean | `false` | default source code rendering                    |
+| `:editor:`        | boolean | `false` | default marimo editor rendering                  |
+| `:output:`        | boolean | `true`  | default browser output island rendering          |
+| `:server-output:` | boolean | `true`  | default build-time preview HTML rendering        |
+| `:error:`         | boolean | `true`  | default build behavior for marimo errors         |
+| `:include:`       | boolean | `true`  | default page node inclusion                      |
+| `:header:`        | string  | none    | Python prepended to generated notebook code      |
+| `:molab:`         | boolean | `true`  | page-level Molab launcher                        |
+| `:pyproject:`     | string  | none    | page-local dependency metadata for `uv run`      |
+| `:external-env:`  | boolean | `false` | use the Jupyter Book Python environment directly |
 
-Cell-only options such as `:hide-code:`, `:hide-output:`, `:disabled:`, `:unparsable:`,
-`:query:`, and `:engine:` are not accepted in `{marimo-config}`. Put those on individual
-`{marimo}` cells.
+Set `:server-output: false` at the page level to keep marimo execution and browser
+hydration with empty build-time preview HTML for every cell. Individual cells can set
+`:server-output: true` when they should keep their static preview.
 
 ## Molab launcher
 
@@ -43,8 +44,8 @@ launcher opens an external Molab page with notebook source generated from the cu
 page, including surrounding Markdown and executable `{marimo}` directive source when the
 plugin can identify and align the source page unambiguously. If Jupyter Book does not
 expose a unique source page, or if source line ranges cannot be aligned safely, the
-launcher falls back to the executable marimo cells and records the fallback reason in
-the widget model.
+launcher still opens the executable marimo cells. The widget model records the fallback
+reason for debugging.
 
 Set `:molab: false` to hide the launcher for a page:
 
@@ -56,7 +57,7 @@ Set `:molab: false` to hide the launcher for a page:
 
 The generated Molab notebook source is separate from the in-page output source. It is
 attached to the first included marimo output on the page so the external launcher can
-open the authored page content, not just the rendered cell result.
+open the authored page content and the rendered cell result.
 
 ## Page-local dependencies
 
@@ -68,13 +69,14 @@ Declare dependencies with `:pyproject:`:
   requires-python = ">=3.10"
   dependencies = [
       "pandas",
-      "marimo>=0.23.5,<0.24",
   ]
 ```
 ````
 
-Pages with `:pyproject:` run through `uv` using marimo's sandbox metadata parsing. Pages
-without `:pyproject:` execute in the current Python process.
+When `:pyproject:` is present, the page runs through `uv` using marimo's sandbox
+metadata parser. The plugin adds marimo to the `uv run` invocation, so page metadata
+only needs the dependencies used by that page. `:pyproject:` isolates dependency
+resolution. It is not a security sandbox for filesystem, process, or network access.
 
-Use `:external-env: true` only when you want to declare that default explicitly.
-`:external-env:` and `:pyproject:` are mutually exclusive.
+Use `:external-env: true` to execute with the Python environment that runs Jupyter Book.
+`:pyproject:` and `:external-env: true` are mutually exclusive.

@@ -4,7 +4,7 @@ title: Styling hooks
 
 # Styling hooks
 
-The public CSS contract is the wrapper class around each rendered island:
+The wrapper class around each rendered island is the public CSS contract:
 
 ```css
 .marimo-jupyter-book-output {
@@ -20,8 +20,8 @@ The public CSS contract is the wrapper class around each rendered island:
 }
 ```
 
-Use those variables from your book theme. Selectors that reach into marimo internals are
-not part of the public contract.
+Set those variables from your book theme. Selectors that reach into marimo internals are
+outside the public contract.
 
 ## Custom stylesheets
 
@@ -29,10 +29,14 @@ The executable accepts custom stylesheet paths through the
 `JUPYTER_BOOK_MARIMO_STYLESHEETS` environment variable or repeated `--style` arguments.
 Values may be:
 
-- absolute `http://` or `https://` URLs;
-- root-relative paths served by the built book;
-- local files, which are embedded into the widget model and injected into marimo shadow
-  roots.
+- absolute `http://` or `https://` URLs
+- root-relative paths served by the built book
+- relative local files or `file://` URLs, which are embedded into the widget model and
+  injected into marimo shadow roots
 
-This repository's book build runs from `docs/` and passes
-`styles/jupyter-book-marimo.css` through `JUPYTER_BOOK_MARIMO_STYLESHEETS`.
+Set the environment variable when you want to test a book stylesheet:
+
+```bash
+cd docs
+JUPYTER_BOOK_MARIMO_STYLESHEETS="styles/jupyter-book-marimo.css" uv run jupyter-book build --html --strict
+```

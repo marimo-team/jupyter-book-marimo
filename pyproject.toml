@@ -5,30 +5,54 @@ description = "Render marimo cells as hydrated islands in Jupyter Book."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
+keywords = ["jupyter-book", "marimo", "myst", "notebooks", "widgets"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" },
 ]
 requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Jupyter",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Documentation",
+]
 dependencies = [
     "marimo>=0.23.5,<0.24",
-    "pyyaml>=6.0.3",
+    "uv",
 ]
 
+[dependency-groups]
+dev = [
+    "deno>=2.8",
+    "jupyter-book>=2.1",
+    "pytest>=9",
+    "ruff>=0.15",
+    "ty>=0.0.39",
+]
+
+[project.urls]
+Documentation = "https://marimo-team.github.io/jupyter-book-marimo/"
+Repository = "https://github.com/marimo-team/jupyter-book-marimo"
+Issues = "https://github.com/marimo-team/jupyter-book-marimo/issues"
+
 [project.scripts]
-jupyter-book-marimo = "jupyter_book_marimo:main"
+jupyter-book-marimo = "jupyter_book_marimo.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.11.10,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-source-include = ["deno.json", "deno.lock", "scripts/**", "widget/**"]
+source-include = ["deno.json", "deno.lock", "scripts/bundle_widget.py", "widget/**"]
 
-[dependency-groups]
-dev = [
-    "deno>=2.7.14",
-    "jupyter-book>=2.1.5",
-    "pytest>=9.0.3",
-    "ruff>=0.15.12",
-    "ty>=0.0.34",
-]
+[tool.uv]
+exclude-newer = "2d"

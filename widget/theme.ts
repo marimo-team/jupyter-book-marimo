@@ -233,7 +233,7 @@ const rememberShadowStyles = (
   stylesheets: string[],
   styleBlocks: StyleBlock[],
 ): void => {
-  // A shadow root can be discovered by multiple mounts; merge style state.
+  // A shadow root can be discovered by multiple mounts. Merge style state.
   const existing = observedShadowRootStyles.get(shadow) ?? {
     stylesheets: [],
     styleBlocks: [],

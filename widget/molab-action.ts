@@ -105,25 +105,26 @@ const ensureMolabActionStyle = (doc: Document): void => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-right: 0.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0 0.25rem 0 0;
+  color: inherit;
   line-height: 1;
   vertical-align: middle;
 }
 
 .myst-fm-molab-icon {
-  display: inline-block;
-  width: 1.125rem;
-  height: 1.125rem;
-  color: #666666;
-  opacity: 0.75;
-  transition: color 120ms ease, opacity 120ms ease;
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  color: currentColor;
+  opacity: 0.6;
+  transition: opacity 120ms ease;
 }
 
 .myst-fm-molab-link:hover .myst-fm-molab-icon,
 .myst-fm-molab-link:focus-visible .myst-fm-molab-icon {
-  color: #397262;
   opacity: 1;
 }
 

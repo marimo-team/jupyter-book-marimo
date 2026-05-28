@@ -33,7 +33,7 @@ def resolve_output(argv: list[str]) -> Path:
 
 
 def normalize_bundle(bundle: str) -> str:
-    """Remove local Deno cache paths from bundled npm module identifiers."""
+    """Return bundle text with stable npm module identifiers."""
 
     def replace(match: re.Match[str]) -> str:
         package = match.group("package")

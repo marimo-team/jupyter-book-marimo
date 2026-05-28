@@ -1,16 +1,9 @@
-"""Package entrypoint for the Jupyter Book executable plugin.
-
-The package keeps imports cheap and exposes the console-script main function
-lazily so discovery does not load the transform pipeline until needed.
-"""
+"""Expose package metadata without importing the plugin pipeline."""
 
 from __future__ import annotations
 
+from importlib.metadata import version
 
-def main() -> None:
-    from .plugin import main as plugin_main
+__version__ = version("jupyter-book-marimo")
 
-    plugin_main()
-
-
-__all__ = ["main"]
+__all__ = ["__version__"]

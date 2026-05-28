@@ -10,8 +10,8 @@ Reactive marimo cells for Jupyter Book.
 
 ## Example
 
-This page is static HTML with live marimo islands. The Python cell ran during the book
-build; the slider and output still update after the page is served.
+Static HTML, live marimo islands. The build executes the Python cells below, and the
+browser hydrates the same output so the slider can update dependent Markdown.
 
 ```{marimo} python
 :editor: true
@@ -26,7 +26,7 @@ demo_count
 mo.md(f"Static HTML, live islands: {'🏝️' * demo_count.value}")
 ```
 
-## What's going on
+## Build and hydration
 
 The two cells above are ordinary MyST `{marimo}` directives. At build time,
 `jupyter-book-marimo` executes them with marimo and writes the rendered output into the
@@ -73,9 +73,10 @@ Build the book:
 jupyter-book build --html
 ```
 
-## Next steps
+## Reference
 
 - [Get started](api/install.md) with installation and `myst.yml` setup.
 - Use the [reference](api/index.md) for directive syntax, page configuration, styling,
   and runtime assets.
-- Open the [tutorials](tutorials/index.md) for marimo examples in a Jupyter Book.
+- Open the [tutorials](tutorials/index.md) for marimo examples rendered through the
+  plugin. Tutorial pages are separate from the API reference.

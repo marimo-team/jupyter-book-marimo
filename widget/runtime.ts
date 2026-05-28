@@ -8,14 +8,51 @@ type NotebookCodeRecord = {
 const loadedModules = new Map<string, Promise<void>>();
 const notebookCodeNodes = new Map<string, NotebookCodeRecord>();
 const appRecords = new Map<string, AppRecord>();
+let exportContextNotebookCode = "";
+const exportContext = Object.freeze({
+  trusted: true,
+  get notebookCode(): string {
+    return exportContextNotebookCode;
+  },
+});
 
 const installExportContext = (notebookCode: string): void => {
   if (!notebookCode) return;
+  exportContextNotebookCode = notebookCode;
+  const existing = Object.getOwnPropertyDescriptor(
+    window,
+    "__MARIMO_EXPORT_CONTEXT__",
+  );
+  if (existing?.value === exportContext) return;
+  if (existing && !existing.configurable) return;
+
   Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
-    value: Object.freeze({ trusted: true, notebookCode }),
+    value: exportContext,
     writable: false,
-    configurable: true,
+    configurable: false,
   });
+};
+
+const versionFromAssets = (assets: RuntimeAssets): string | undefined => {
+  if (assets.version) return assets.version;
+
+  for (const src of assets.moduleScripts) {
+    const match = src.match(/@marimo-team\/islands@([^/]+)/);
+    if (match?.[1]) return match[1];
+  }
+
+  return undefined;
+};
+
+const installMountConfig = (assets: RuntimeAssets): void => {
+  const existing = (window as { __MARIMO_MOUNT_CONFIG__?: unknown })
+    .__MARIMO_MOUNT_CONFIG__;
+  if (existing && typeof existing === "object" && "version" in existing) return;
+
+  (window as { __MARIMO_MOUNT_CONFIG__?: { version: string } })
+    .__MARIMO_MOUNT_CONFIG__ = {
+      version: versionFromAssets(assets) ?? "unknown",
+    };
 };
 
 const releaseNotebookCode = (appId: string): void => {
@@ -81,8 +118,11 @@ const ensureLinks = (links: RuntimeAssets["links"]): void => {
 };
 
 const ensureModule = (src: string): Promise<void> => {
-  // Dynamic import is the browser-visible equivalent of loading marimo's head.
-  const href = new URL(src, document.baseURI).href;
+  // Load the module script from marimo's exported island head.
+  const base = document.baseURI ||
+    (globalThis as { location?: Location }).location?.href ||
+    "http://localhost/";
+  const href = new URL(src, base).href;
   const existing = loadedModules.get(href);
   if (existing) return existing;
 
@@ -100,7 +140,7 @@ const ensureModule = (src: string): Promise<void> => {
 export const appRecord = (appId: string): AppRecord => {
   /*
    * One payload-bearing island boots the marimo app. Sibling islands with the
-   * same appId share this readiness promise instead of re-importing assets.
+   * same appId reuse this readiness promise and avoid repeated asset imports.
    */
   const existing = appRecords.get(appId);
   if (existing) return existing;
@@ -148,6 +188,7 @@ export const retainApp = (
   if (!record.started) {
     record.started = true;
     installExportContext(notebookCode);
+    installMountConfig(assets);
     ensureLinks(assets.links);
     Promise.all(assets.moduleScripts.map(ensureModule)).then(
       () => {
@@ -193,7 +234,7 @@ export const ensureDocumentNavigation = (): void => {
   if (documentNavigationStarted) return;
   documentNavigationStarted = true;
 
-  // Jupyter Book page swaps can otherwise keep a stale marimo bridge alive.
+  // Client-side page swaps can keep a stale marimo runtime bridge alive.
   document.addEventListener(
     "click",
     (event) => {

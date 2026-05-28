@@ -1,4 +1,4 @@
-"""Parse the public MyST directive surface into executable marimo cell models."""
+"""Normalize MyST directive payloads into marimo execution inputs."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ DEFAULT_EXECUTION_OPTIONS: ExecutionOptions = {
     "eval": True,
     "echo": False,
     "output": True,
+    "server_output": True,
     "error": True,
     "include": True,
     "editor": False,
@@ -26,7 +27,14 @@ DEFAULT_EXECUTION_OPTIONS: ExecutionOptions = {
 BOOLEAN_OPTION_SPEC = {"type": "boolean"}
 STRING_OPTION_SPEC = {"type": "string"}
 NUMBER_OPTION_SPEC = {"type": "number"}
-EXECUTION_OPTION_SPECS = {key: BOOLEAN_OPTION_SPEC for key in DEFAULT_EXECUTION_OPTIONS}
+EXECUTION_OPTION_SPECS = {
+    **{
+        key: BOOLEAN_OPTION_SPEC
+        for key in DEFAULT_EXECUTION_OPTIONS
+        if key != "server_output"
+    },
+    "server-output": BOOLEAN_OPTION_SPEC,
+}
 
 MARIMO_DIRECTIVE_OPTION_SPECS = {
     **EXECUTION_OPTION_SPECS,
@@ -129,6 +137,10 @@ def should_display_output(config: ExecutionOptions) -> bool:
     )
 
 
+def should_display_server_output(config: ExecutionOptions) -> bool:
+    return should_display_output(config) and as_bool(config.get("server_output"), True)
+
+
 @dataclass
 class Cell:
     """One executable authoring unit plus the MyST position that produced it."""
@@ -197,13 +209,11 @@ def _normalize_cell_options(options: dict[str, Any], language: str) -> CellOptio
 
 
 def cell_from_directive(data: dict[str, Any]) -> Cell:
-    """Enforce the v1 authoring contract for one `{marimo}` directive."""
+    """Return one executable `{marimo}` directive."""
     language = str(data.get("arg") or "").strip().lower()
     if language not in SUPPORTED_LANGUAGES:
         supported = ", ".join(sorted(SUPPORTED_LANGUAGES))
-        raise ValueError(
-            f"Unsupported marimo language: {language!r}; expected {supported}"
-        )
+        raise ValueError(f"marimo language must be one of: {supported}")
 
     options = _normalize_cell_options(_directive_options(data), language)
     return Cell(
@@ -214,7 +224,7 @@ def cell_from_directive(data: dict[str, Any]) -> Cell:
 
 
 def config_from_directive(data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the single page-level `{marimo-config}` directive."""
+    """Return page-level `{marimo-config}` metadata."""
     options = _directive_options(data)
     _reject_unknown_options(options, CONFIG_OPTION_KEYS, directive="marimo-config")
     _reject_conflicts(options)

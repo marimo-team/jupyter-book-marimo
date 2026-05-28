@@ -37,12 +37,12 @@ require_command() {
 }
 
 current_version() {
-  awk -F '"' '/^version = / { print $2; exit }' pyproject.toml
+  uv version --short
 }
 
 write_version() {
   local version="$1"
-  perl -0pi -e "s/^version = \"[0-9]+\\.[0-9]+\\.[0-9]+\"$/version = \"$version\"/m" pyproject.toml
+  uv version --frozen "$version" >/dev/null
 }
 
 bump_version() {
@@ -78,7 +78,8 @@ restore_version_on_failure() {
 
   if [[ "$status" -ne 0 && "${VERSION_UPDATED:-0}" == "1" && "${COMMITTED:-0}" == "0" ]]; then
     write_version "$CURRENT_VERSION"
-    printf '\nRestored pyproject.toml to %s.\n' "$CURRENT_VERSION"
+    uv lock
+    printf '\nRestored pyproject.toml and uv.lock to %s.\n' "$CURRENT_VERSION"
   fi
 
   exit "$status"
@@ -103,13 +104,12 @@ fi
 
 require_command git
 require_command make
-require_command perl
 require_command uv
 
 print_step "Checking branch"
 BRANCH="$(git branch --show-current)"
 if [[ "$BRANCH" != "main" ]]; then
-  print_error "Releases must be cut from main; current branch is $BRANCH"
+  print_error "Releases must be cut from main. Current branch is $BRANCH"
   exit 1
 fi
 
@@ -138,7 +138,7 @@ Release summary:
   New version:     $NEW_VERSION
   Commit:          release: $NEW_VERSION
   Tag:             $NEW_VERSION
-  Checks:          make check && make book-build
+  Checks:          make release-check
 EOF
 
 if ! confirm "Proceed with release"; then
@@ -153,13 +153,13 @@ trap restore_version_on_failure EXIT
 print_step "Bumping version"
 write_version "$NEW_VERSION"
 VERSION_UPDATED=1
+uv lock
 
 print_step "Running release checks"
-make check
-make book-build
+make release-check
 
 print_step "Committing version"
-git add pyproject.toml
+git add pyproject.toml uv.lock
 git commit -m "release: $NEW_VERSION"
 COMMITTED=1
 

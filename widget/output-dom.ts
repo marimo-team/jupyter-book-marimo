@@ -1,12 +1,4 @@
-import {
-  loadingClass,
-  nestedRuntimeContainerSelector,
-  outputClass,
-  pendingClass,
-  pendingStatusClass,
-  previewClass,
-  runtimeElementSelector,
-} from "./styles.ts";
+import { outputClass } from "./styles.ts";
 import type { Release } from "./model.ts";
 
 const firstElementChild = (node: Element): HTMLElement | null => {
@@ -24,7 +16,7 @@ export const suppressMimeRenderers = (
   root: ParentNode,
   mimetypes: string[],
 ): void => {
-  // Used after `error: false`: keep successful output, remove error renderers.
+  // After `error: false`, keep successful output and remove error renderers.
   if (mimetypes.length === 0) return;
 
   root.querySelectorAll("marimo-mime-renderer").forEach((node) => {
@@ -35,6 +27,58 @@ export const suppressMimeRenderers = (
     if (mimetypes.includes(mime)) {
       node.remove();
     }
+  });
+};
+
+const runtimeOwnedOutputSelector = [
+  "marimo-anywidget",
+  "marimo-json-output",
+  "marimo-mime-renderer",
+  "marimo-table",
+  "marimo-ui-element",
+].join(",");
+
+const runtimeOwnedContainerSelector = [
+  "marimo-accordion",
+  "marimo-carousel",
+  "marimo-tabs",
+].join(",");
+
+const runtimeOwnedOutputPattern =
+  /marimo-(anywidget|json-output|table|ui-element)|\\u003cmarimo-(anywidget|json-output|table|ui-element)/i;
+
+const hasRuntimeOwnedAttribute = (node: Element): boolean => {
+  return Array.from(node.attributes).some((attribute) =>
+    runtimeOwnedOutputPattern.test(attribute.value)
+  );
+};
+
+const shouldDeferRuntimeOwnedNode = (node: Element): boolean => {
+  if (node.tagName === "MARIMO-MIME-RENDERER") {
+    return hasRuntimeOwnedAttribute(node);
+  }
+  if (node.tagName !== "MARIMO-UI-ELEMENT") return true;
+  return node.querySelector("marimo-code-editor") === null;
+};
+
+const shouldDeferRuntimeOwnedContainer = (node: Element): boolean => {
+  if (hasRuntimeOwnedAttribute(node)) return true;
+  return Array.from(node.querySelectorAll(runtimeOwnedOutputSelector)).some(
+    shouldDeferRuntimeOwnedNode,
+  );
+};
+
+export const deferRuntimeOwnedOutput = (root: ParentNode): void => {
+  /*
+   * These custom elements are recreated by the browser runtime. Keeping the
+   * build-time copies leaves inert controls and stale renderers in front of the
+   * hydrated island.
+   */
+  root.querySelectorAll(runtimeOwnedContainerSelector).forEach((node) => {
+    if (shouldDeferRuntimeOwnedContainer(node)) node.remove();
+  });
+  root.querySelectorAll(runtimeOwnedOutputSelector).forEach((node) => {
+    if (shouldDeferRuntimeOwnedNode(node)) node.remove();
   });
 };
 
@@ -50,170 +94,6 @@ export const observeSuppressedMimeRenderers = (
   });
   observer.observe(root, { childList: true, subtree: true });
   return () => observer.disconnect();
-};
-
-const containsMarimoUiElement = (node: Element): boolean => {
-  return ["data-data", "data-json-data"]
-    .map((name) => node.getAttribute(name) ?? "")
-    .some((value) => value.includes("marimo-ui-element"));
-};
-
-const displayRuntimeSelector = "marimo-table, marimo-json-output, marimo-mime-renderer";
-
-const isDisplayCodeEditor = (node: Element): boolean => {
-  return node.matches("marimo-ui-element") &&
-    Boolean(node.querySelector("marimo-code-editor"));
-};
-
-const shouldDeferServerRuntimeElement = (node: Element): boolean => {
-  /*
-   * Server-rendered interactive elements are stale placeholders until browser
-   * marimo recreates them. Display-code editors are static source views, so
-   * leave those in place.
-   */
-  if (isDisplayCodeEditor(node)) {
-    return false;
-  }
-  if (node.matches("marimo-anywidget, marimo-ui-element, marimo-table")) {
-    return true;
-  }
-  if (node.matches("marimo-mime-renderer, marimo-json-output")) {
-    return containsMarimoUiElement(node);
-  }
-  return false;
-};
-
-const hasDeferredRuntimeAncestor = (node: Element): boolean => {
-  return Boolean(
-    node.parentElement?.closest(
-      `${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`,
-    ),
-  );
-};
-
-const staticTextWithoutRuntimeElements = (node: Element): string => {
-  const clone = node.cloneNode(true);
-  if (!(clone instanceof Element)) return "";
-  clone
-    .querySelectorAll(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)
-    .forEach((child) => child.remove());
-  return clone.textContent.trim();
-};
-
-const hasDisplayRuntimeElement = (node: Element): boolean => {
-  if (node.matches(displayRuntimeSelector)) return true;
-  return Boolean(node.querySelector(displayRuntimeSelector));
-};
-
-const hasOnlyDisplayRuntimeElements = (node: Element): boolean => {
-  const runtimeElements = Array.from(node.querySelectorAll(runtimeElementSelector));
-  if (node.matches(runtimeElementSelector)) {
-    runtimeElements.unshift(node);
-  }
-  return runtimeElements.length > 0 &&
-    runtimeElements.every((element) =>
-      element.matches(displayRuntimeSelector) ||
-      Boolean(element.querySelector(displayRuntimeSelector))
-    );
-};
-
-const canUsePendingPreview = (node: Element): boolean => {
-  /*
-   * Keep useful server-rendered output visible while browser hydration catches
-   * up. Pure inputs and anywidgets still use the skeleton, because their stale
-   * server DOM is not meaningful until marimo recreates it.
-   */
-  if (node.matches("marimo-anywidget")) return false;
-  if (node.matches("marimo-table") || node.querySelector("marimo-table")) {
-    return false;
-  }
-  if (!node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
-    return !node.querySelector(runtimeElementSelector);
-  }
-  if (staticTextWithoutRuntimeElements(node)) return true;
-  if (hasOnlyDisplayRuntimeElements(node)) return true;
-  return hasDisplayRuntimeElement(node) && !node.matches("marimo-ui-element");
-};
-
-type RuntimePlaceholderPolicy = "remove" | "preview" | "skeleton";
-
-const runtimePlaceholderPolicy = (node: Element): RuntimePlaceholderPolicy => {
-  /*
-   * The marimo island runtime treats server-rendered children as the cell's
-   * initial DOM. Runtime placeholders inside an island can therefore become
-   * permanent for cells whose browser output is initially empty or unchanged.
-   * Remove stale runtime elements inside islands and let the browser runtime own
-   * that cell container from an empty starting point.
-   */
-  if (node.closest("marimo-island")) return "remove";
-  return canUsePendingPreview(node) ? "preview" : "skeleton";
-};
-
-const pendingStatusNode = (): HTMLElement => {
-  const node = document.createElement("div");
-  node.className = pendingStatusClass;
-  node.setAttribute("role", "status");
-  node.textContent = "Preparing live output";
-  return node;
-};
-
-const replaceWithPendingPreview = (node: Element): void => {
-  /*
-   * Preserve static HTML as a dimmed preview only when it does not itself contain
-   * live marimo runtime elements that the browser will recreate.
-   */
-  const policy = runtimePlaceholderPolicy(node);
-  if (policy === "remove") {
-    node.remove();
-    return;
-  }
-
-  const wrapper = document.createElement("div");
-  wrapper.className = pendingClass;
-  wrapper.setAttribute("aria-busy", "true");
-  wrapper.setAttribute("aria-disabled", "true");
-  wrapper.inert = true;
-
-  if (policy === "preview") {
-    const preview = document.createElement("div");
-    preview.className = previewClass;
-
-    wrapper.append(preview, pendingStatusNode(), loadingNode());
-    node.replaceWith(wrapper);
-    preview.append(node);
-  } else {
-    wrapper.append(loadingNode());
-    node.replaceWith(wrapper);
-  }
-};
-
-export const deferServerRuntimeElements = (fragment: ParentNode): void => {
-  fragment
-    .querySelectorAll(runtimeElementSelector)
-    .forEach((node) => {
-      if (hasDeferredRuntimeAncestor(node)) return;
-      if (!shouldDeferServerRuntimeElement(node)) return;
-      replaceWithPendingPreview(node);
-    });
-};
-
-export const deferNestedServerRuntimeElements = (fragment: ParentNode): void => {
-  fragment
-    .querySelectorAll(nestedRuntimeContainerSelector)
-    .forEach((node) => {
-      if (hasDeferredRuntimeAncestor(node)) return;
-      if (!node.innerHTML.includes("marimo-ui-element")) return;
-      replaceWithPendingPreview(node);
-    });
-};
-
-const hasVisiblePreview = (wrapper: HTMLElement): boolean => {
-  const preview = wrapper.querySelector(`:scope > .${previewClass}`);
-  if (!(preview instanceof HTMLElement)) return false;
-  if (preview.textContent.trim()) return true;
-
-  const rect = preview.getBoundingClientRect();
-  return rect.width > 1 && rect.height > 1;
 };
 
 const rootIsConnected = (root: ParentNode): boolean => {
@@ -242,26 +122,6 @@ const scheduleConnectedDomChecks = (
     cancelAnimationFrame(frame);
     timeouts.forEach(clearTimeout);
   };
-};
-
-const refreshPendingPreviews = (root: ParentNode): void => {
-  root.querySelectorAll(`.${pendingClass}`).forEach((wrapper) => {
-    if (!(wrapper instanceof HTMLElement)) return;
-    if (hasVisiblePreview(wrapper)) {
-      wrapper.dataset.hasPreview = "true";
-    } else {
-      delete wrapper.dataset.hasPreview;
-    }
-  });
-};
-
-export const schedulePendingPreviews = (root: ParentNode): Release => {
-  // Preview visibility can change after fonts, custom elements, or layout settle.
-  return scheduleConnectedDomChecks(
-    root,
-    () => refreshPendingPreviews(root),
-    [100, 500, 1500, 3000],
-  );
 };
 
 const cellIdFromIsland = (island: Element): string => {
@@ -339,17 +199,6 @@ export const createLightDomMount = (el: HTMLElement): HTMLElement => {
   mount.className = outputClass;
   host.appendChild(mount);
   return mount;
-};
-
-export const loadingNode = (): HTMLElement => {
-  const node = document.createElement("div");
-  node.className = loadingClass;
-  node.setAttribute("role", "status");
-  node.setAttribute("aria-label", "Loading marimo output");
-  for (let index = 0; index < 3; index += 1) {
-    node.appendChild(document.createElement("span"));
-  }
-  return node;
 };
 
 export const runtimeError = (error: unknown): HTMLDetailsElement => {

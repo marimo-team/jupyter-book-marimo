@@ -532,6 +532,15 @@ var getBoolean = (value, fallback) => {
   if (typeof value === "string") return value.toLowerCase() === "true";
   return fallback;
 };
+var getModelNumber = (model, key) => {
+  const value = getModelValue(model, key, 0);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 var recordFrom = (value) => {
   return value && typeof value === "object" ? value : {};
 };
@@ -577,7 +586,8 @@ var assetsFromModel = (model, head) => {
   const record = assets && typeof assets === "object" ? assets : {};
   return {
     links: validLinkList(record.links) ? record.links : linksFromFragment(head),
-    moduleScripts: validModuleScriptList(record.moduleScripts) ? record.moduleScripts : modulesFromFragment(head)
+    moduleScripts: validModuleScriptList(record.moduleScripts) ? record.moduleScripts : modulesFromFragment(head),
+    version: typeof record.version === "string" ? record.version : void 0
   };
 };
 var molabActionConfigFromWidgetConfig = (config) => {
@@ -610,6 +620,7 @@ var readOutputModel = (model) => {
     customStylesheets: getModelStringList(model, "customStylesheets"),
     customStyleBlocks: getModelStyleBlocks(model),
     suppressMimetypes: getModelStringList(model, "suppressMimetypes"),
+    runtimeCellCount: getModelNumber(model, "runtimeCellCount"),
     widgetConfig: widgetConfigFromModel(model)
   };
 };
@@ -624,16 +635,39 @@ var isOutputBodyEmpty = (output) => {
 var loadedModules = /* @__PURE__ */ new Map();
 var notebookCodeNodes = /* @__PURE__ */ new Map();
 var appRecords = /* @__PURE__ */ new Map();
+var exportContextNotebookCode = "";
+var exportContext = Object.freeze({
+  trusted: true,
+  get notebookCode() {
+    return exportContextNotebookCode;
+  }
+});
 var installExportContext = (notebookCode) => {
   if (!notebookCode) return;
+  exportContextNotebookCode = notebookCode;
+  const existing = Object.getOwnPropertyDescriptor(window, "__MARIMO_EXPORT_CONTEXT__");
+  if (existing?.value === exportContext) return;
+  if (existing && !existing.configurable) return;
   Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
-    value: Object.freeze({
-      trusted: true,
-      notebookCode
-    }),
+    value: exportContext,
     writable: false,
-    configurable: true
+    configurable: false
   });
+};
+var versionFromAssets = (assets) => {
+  if (assets.version) return assets.version;
+  for (const src of assets.moduleScripts) {
+    const match = src.match(/@marimo-team\/islands@([^/]+)/);
+    if (match?.[1]) return match[1];
+  }
+  return void 0;
+};
+var installMountConfig = (assets) => {
+  const existing = window.__MARIMO_MOUNT_CONFIG__;
+  if (existing && typeof existing === "object" && "version" in existing) return;
+  window.__MARIMO_MOUNT_CONFIG__ = {
+    version: versionFromAssets(assets) ?? "unknown"
+  };
 };
 var releaseNotebookCode = (appId) => {
   const record = notebookCodeNodes.get(appId);
@@ -679,7 +713,8 @@ var ensureLinks = (links) => {
   }
 };
 var ensureModule = (src) => {
-  const href = new URL(src, document.baseURI).href;
+  const base = document.baseURI || globalThis.location?.href || "http://localhost/";
+  const href = new URL(src, base).href;
   const existing = loadedModules.get(href);
   if (existing) return existing;
   const promise = import(href).then(() => void 0, () => {
@@ -725,6 +760,7 @@ var retainApp = (appId, notebookCode, assets) => {
   if (!record.started) {
     record.started = true;
     installExportContext(notebookCode);
+    installMountConfig(assets);
     ensureLinks(assets.links);
     Promise.all(assets.moduleScripts.map(ensureModule)).then(() => {
       record.ready = true;
@@ -768,12 +804,6 @@ var ensureDocumentNavigation = () => {
 
 // widget/styles.ts
 var outputClass = "marimo-jupyter-book-output";
-var loadingClass = "marimo-jupyter-book-loading";
-var pendingClass = "marimo-jupyter-book-pending";
-var previewClass = "marimo-jupyter-book-preview";
-var pendingStatusClass = "marimo-jupyter-book-pending-status";
-var runtimeElementSelector = "marimo-anywidget, marimo-ui-element, marimo-mime-renderer, marimo-json-output, marimo-table";
-var nestedRuntimeContainerSelector = "marimo-accordion, marimo-tabs, marimo-carousel";
 var themeStyleId = "marimo-jupyter-book-theme";
 var shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
 var customStyleAttribute = "data-jupyter-book-marimo-custom-style";
@@ -781,6 +811,9 @@ var globalThemeCss = `
 .${outputClass} {
   color: inherit;
   color-scheme: inherit;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
   --jbm-background: var(--myst-color-background, var(--pst-color-background, Canvas));
   --jbm-foreground: var(--myst-color-text, var(--pst-color-text-base, CanvasText));
   --jbm-surface: var(--myst-color-surface, var(--pst-color-surface, Field));
@@ -797,35 +830,132 @@ var globalThemeCss = `
   --jbm-code-border: var(--jbm-border);
   --jbm-inline-code-bg: color-mix(in srgb, var(--jbm-accent) 10%, transparent);
   --jbm-inline-code-fg: var(--jbm-foreground);
-  --jbm-pending-bg: color-mix(in srgb, var(--jbm-surface) 78%, transparent);
-  --jbm-pending-border: var(--jbm-border);
-  --jbm-pending-status-bg: color-mix(in srgb, var(--jbm-background) 86%, transparent);
-  --jbm-pending-status-fg: var(--jbm-muted-foreground);
-  --jbm-skeleton-bg: color-mix(in srgb, var(--jbm-surface) 86%, transparent);
-  --jbm-skeleton-line: color-mix(in srgb, var(--jbm-foreground) 14%, transparent);
-  --jbm-skeleton-line-strong: color-mix(in srgb, var(--jbm-foreground) 24%, transparent);
   --jbm-hover-bg: color-mix(in srgb, var(--jbm-foreground) 8%, transparent);
   --jbm-selection-bg: color-mix(in srgb, var(--jbm-accent) 28%, transparent);
 }
 
 .${outputClass}[data-jb-theme="dark"] {
   color-scheme: dark;
+  --jbm-background: var(--myst-color-background, var(--pst-color-background, #1c1917));
+  --jbm-foreground: var(--myst-color-text, var(--pst-color-text-base, #e7e5e4));
+  --jbm-surface: var(--myst-color-surface, var(--pst-color-surface, #292524));
+  --jbm-muted-surface: color-mix(in srgb, var(--jbm-foreground) 9%, var(--jbm-background));
+  --jbm-raised-surface: color-mix(in srgb, var(--jbm-foreground) 6%, var(--jbm-background));
+  --jbm-border: var(--myst-color-border, var(--pst-color-border, rgba(168, 162, 158, 0.36)));
+  --jbm-muted-foreground: var(--myst-color-text-muted, var(--pst-color-text-muted, #a8a29e));
+  --jbm-code-bg: var(--myst-color-code-background, var(--pst-color-on-background, #292524));
+  --jbm-code-fg: var(--jbm-foreground);
 }
 
 .${outputClass}[data-jb-theme="light"] {
   color-scheme: light;
 }
 
+.${outputClass}[data-jb-theme="dark"]
+  :where(
+    .admonition,
+    [class*="admonition"],
+    .callout,
+    .markdown.prose,
+    .markdown.prose *,
+    .codehilite,
+    .codehilite *,
+    .highlight,
+    .highlight *,
+    pre,
+    pre *,
+    code,
+    code *,
+    marimo-accordion,
+    marimo-accordion *,
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td,
+    .marimo-json-output,
+    .marimo-json-output *,
+    .json-viewer-theme-light,
+    .json-viewer-theme-light *,
+    label,
+    input,
+    output,
+    [role="cell"],
+    [role="columnheader"],
+    [role="rowheader"]
+  ) {
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+.${outputClass}[data-jb-theme="dark"]
+  :where(.admonition, [class*="admonition"], .callout) {
+  background: var(--jbm-muted-surface, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+}
+
+.${outputClass}[data-jb-theme="dark"] .marimo .markdown.prose .admonition,
+.${outputClass}[data-jb-theme="dark"]
+  .marimo
+  .markdown.prose
+  [class*="admonition"],
+.${outputClass}[data-jb-theme="dark"] .marimo .markdown.prose .callout {
+  background: var(--jbm-muted-surface, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+.${outputClass}[data-jb-theme="dark"] .marimo .markdown.prose .admonition *,
+.${outputClass}[data-jb-theme="dark"]
+  .marimo
+  .markdown.prose
+  [class*="admonition"]
+  *,
+.${outputClass}[data-jb-theme="dark"] .marimo .markdown.prose .callout * {
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+.${outputClass}[data-jb-theme="dark"]
+  :where([style*="background-color: orange"], [style*="background: orange"]) {
+  color: #111827 !important;
+}
+
+.${outputClass} :where(marimo-island, marimo-cell-output) {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.${outputClass} :where(p, li) code,
+.${outputClass} :where(p, li) code * {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 48rem) {
+  .${outputClass} :where(.myst-code pre, .myst-code code, .myst-code code *) {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
 .${outputClass} :where(pre) {
-  background: var(--jbm-code-bg) !important;
-  color: var(--jbm-code-fg) !important;
+  background: var(--jbm-code-bg, #292524) !important;
+  color: var(--jbm-code-fg, #e7e5e4) !important;
   border: 0 !important;
   box-shadow: none !important;
 }
 
 .${outputClass} :where(.myst-code) {
-  background: var(--jbm-code-bg) !important;
-  border: 1px solid var(--jbm-code-border);
+  background: var(--jbm-code-bg, #292524) !important;
+  border: 1px solid var(--jbm-code-border, rgba(168, 162, 158, 0.36));
+  box-shadow: none !important;
+}
+
+.${outputClass} :where(.codehilite, .highlight) {
+  background: var(--jbm-code-bg, #292524) !important;
   box-shadow: none !important;
 }
 
@@ -834,6 +964,8 @@ var globalThemeCss = `
 }
 
 .${outputClass} :where(
+  .codehilite pre,
+  .highlight pre,
   .myst-code-body,
   .myst-code .myst-code-body,
   .myst-code .myst-code-body.hljs,
@@ -849,93 +981,17 @@ var globalThemeCss = `
 }
 
 .${outputClass} pre {
-  background: var(--jbm-code-bg) !important;
-  color: var(--jbm-code-fg) !important;
+  background: var(--jbm-code-bg, #292524) !important;
+  color: var(--jbm-code-fg, #e7e5e4) !important;
   border: 0 !important;
   box-shadow: none !important;
 }
 
-.${pendingClass} {
-  position: relative;
-  max-width: 100%;
-}
-
-.${pendingClass}[data-has-preview="true"] {
-  width: fit-content;
-  max-width: 100%;
-  padding: 0.5rem;
-  border: 1px dashed var(--jbm-pending-border);
-  border-radius: 0.5rem;
-  background: var(--jbm-pending-bg);
-}
-
-.${pendingClass}[data-has-preview="true"] > .${previewClass} {
-  opacity: 0.58;
-  filter: grayscale(0.32) saturate(0.82);
-  pointer-events: none;
-  user-select: none;
-}
-
-.${pendingClass}:not([data-has-preview="true"]) > .${previewClass},
-.${pendingClass}:not([data-has-preview="true"]) > .${pendingStatusClass},
-.${pendingClass}[data-has-preview="true"] > .${loadingClass} {
-  display: none;
-}
-
-.${pendingStatusClass} {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 0.375rem;
-  margin-top: 0.375rem;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--jbm-pending-border);
-  border-radius: 999px;
-  background: var(--jbm-pending-status-bg);
-  color: var(--jbm-pending-status-fg);
-  font-size: 0.75rem;
-  line-height: 1.25;
-  font-weight: 500;
-}
-
-.${pendingStatusClass}::before {
-  content: "";
-  width: 0.375rem;
-  height: 0.375rem;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.7;
-}
-
-.${loadingClass} {
-  display: grid;
-  gap: 0.625rem;
-  width: min(100%, 34rem);
-  min-height: 5.25rem;
-  padding: 0.875rem;
-  border: 1px solid var(--jbm-pending-border);
-  border-radius: 0.5rem;
-  background: var(--jbm-skeleton-bg);
-}
-
-.${loadingClass} > span {
-  display: block;
-  height: 0.75rem;
-  border-radius: 999px;
-  background: var(--jbm-skeleton-line);
-}
-
-.${loadingClass} > span:first-child {
-  width: 62%;
-  background: var(--jbm-skeleton-line-strong);
-}
-
-.${loadingClass} > span:nth-child(2) {
-  width: 92%;
-}
-
-.${loadingClass} > span:last-child {
-  width: 44%;
+.${outputClass} :where(
+  marimo-island[data-jupyter-book-marimo-hide-output="true"] > marimo-cell-output,
+  marimo-island[data-jupyter-book-marimo-hide-output="true"] > :first-child:not(marimo-ui-element)
+) {
+  display: none !important;
 }
 `;
 var shadowThemeCss = `
@@ -965,10 +1021,232 @@ var shadowThemeCss = `
 
 :host([data-jb-theme="dark"]) {
   color-scheme: dark;
+  --background: var(--jbm-background, #1c1917);
+  --foreground: var(--jbm-foreground, #d6d3d1);
+  --card: var(--jbm-surface, #292524);
+  --card-foreground: var(--jbm-foreground, #d6d3d1);
+  --popover: var(--jbm-surface, #292524);
+  --popover-foreground: var(--jbm-foreground, #d6d3d1);
+  --secondary: var(--jbm-muted-surface, #44403c);
+  --secondary-foreground: var(--jbm-foreground, #f5f5f4);
+  --muted: var(--jbm-muted-surface, #292524);
+  --muted-foreground: var(--jbm-muted-foreground, #a8a29e);
+  --border: var(--jbm-border, rgba(168, 162, 158, 0.36));
+  --input: var(--jbm-border, rgba(168, 162, 158, 0.4));
+  --cm-background: var(--jbm-code-bg, #292524);
+  --cm-foreground: var(--jbm-code-fg, #e7e5e4);
+  --cm-comment: var(--jbm-muted-foreground, #a8a29e);
 }
 
 :host([data-jb-theme="light"]) {
   color-scheme: light;
+}
+
+:host([data-jb-theme="dark"]) :where(.marimo) {
+  background: transparent !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(
+    .admonition,
+    [class*="admonition"],
+    .callout,
+    .marimo *,
+    .markdown.prose,
+    .markdown.prose *,
+    .codehilite,
+    .codehilite *,
+    .highlight,
+    .highlight *,
+    pre,
+    pre *,
+    code,
+    code *,
+    marimo-accordion,
+    marimo-accordion *,
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td,
+    .marimo-json-output,
+    .marimo-json-output *,
+    .json-viewer-theme-light,
+    .json-viewer-theme-light *,
+    label,
+    input,
+    output,
+    [role="cell"],
+    [role="columnheader"],
+    [role="rowheader"]
+  ) {
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.admonition, [class*="admonition"], .callout) {
+  background: var(--muted, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where([style*="background-color: orange"], [style*="background: orange"]) {
+  color: #111827 !important;
+}
+
+:host :where(input, button, select, textarea, [role="button"], [role="combobox"]) {
+  min-height: 1.75rem;
+}
+
+:host :where(table) {
+  max-width: 100%;
+}
+
+:host([data-jb-theme="dark"])
+  :where(
+    .bg-background,
+    .bg-card,
+    .bg-white,
+    [class*="bg-background"],
+    [class*="bg-card"],
+    [class*="bg-white"]
+  ) {
+  background: var(--jbm-surface, #292524) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.cm-editor, .cm-scroller, .cm-content) {
+  background: #292524 !important;
+  color: #e7e5e4 !important;
+  --cm-background: #292524 !important;
+  --cm-foreground: #e7e5e4 !important;
+}
+
+:host([data-jb-theme="dark"]) :where(.cm-gutters) {
+  background: #1c1917 !important;
+  border-color: rgba(168, 162, 158, 0.36) !important;
+  color: #a8a29e !important;
+}
+
+:host([data-jb-theme="dark"]) :where(.cm-activeLine, .cm-activeLineGutter) {
+  background: var(--jbm-hover-bg, rgba(255, 255, 255, 0.08)) !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo,
+:host([data-jb-theme="dark"]) .marimo :is(
+  .admonition,
+  [class*="admonition"],
+  .callout,
+  .contents.light,
+  .font-prose,
+  .mo-label,
+  .mo-label *,
+  .markdown,
+  .markdown *,
+  .codehilite,
+  .codehilite *,
+  .highlight,
+  .highlight *,
+  pre,
+  pre *,
+  code,
+  code *,
+  marimo-accordion,
+  marimo-accordion *,
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td,
+  .marimo-json-output,
+  .marimo-json-output *,
+  .json-viewer-theme-light,
+  .json-viewer-theme-light *,
+  label,
+  output,
+  [id="sliderValues"],
+  [role="cell"],
+  [role="columnheader"],
+  [role="rowheader"]
+) {
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo
+  :is(.codehilite, .highlight, pre) {
+  background: var(--jbm-code-bg, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo :is(
+  .bg-background,
+  .bg-card,
+  .bg-muted,
+  .bg-secondary,
+  .bg-white,
+  [class*="bg-background"],
+  [class*="bg-card"],
+  [class*="bg-muted"],
+  [class*="bg-secondary"],
+  [class*="bg-white"]
+) {
+  background: var(--jbm-surface, #292524) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo :is(input, textarea, select) {
+  background: #f8fafc !important;
+  color: #111827 !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo .contents.light,
+:host([data-jb-theme="dark"]) .marimo .contents.light *,
+:host([data-jb-theme="dark"]) .marimo .contents.light .font-prose,
+:host([data-jb-theme="dark"]) .marimo .contents.light .font-prose *,
+:host([data-jb-theme="dark"]) .marimo .contents.light .markdown,
+:host([data-jb-theme="dark"]) .marimo .contents.light .markdown *,
+:host([data-jb-theme="dark"]) .marimo .contents.light .mo-label,
+:host([data-jb-theme="dark"]) .marimo .contents.light .mo-label *,
+:host([data-jb-theme="dark"]) .marimo .contents.light .text-muted-foreground,
+:host([data-jb-theme="dark"])
+  .marimo
+  .contents.light
+  .text-muted-foreground
+  * {
+  color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo .contents.light :is(
+  input,
+  textarea,
+  select,
+  option
+) {
+  background: #f8fafc !important;
+  color: #111827 !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo .contents.light input.bg-background,
+:host([data-jb-theme="dark"]) .marimo .contents.light input.flex-1,
+:host([data-jb-theme="dark"]) .marimo .contents.light input.w-full,
+:host([data-jb-theme="dark"]) .marimo .contents.light input[class*="placeholder"],
+:host([data-jb-theme="dark"]) .marimo .contents.light textarea.bg-background,
+:host([data-jb-theme="dark"]) .marimo .contents.light select.bg-background,
+:host([data-jb-theme="dark"]) .marimo .contents.light option {
+  background: #f8fafc !important;
+  color: #111827 !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo .contents.light .bg-muted,
+:host([data-jb-theme="dark"]) .marimo .contents.light .bg-secondary,
+:host([data-jb-theme="dark"]) .marimo .contents.light [class*="bg-muted"],
+:host([data-jb-theme="dark"]) .marimo .contents.light [class*="bg-secondary"] {
+  background: var(--jbm-surface, #292524) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
 }
 `;
 
@@ -989,6 +1267,41 @@ var suppressMimeRenderers = (root, mimetypes) => {
     }
   });
 };
+var runtimeOwnedOutputSelector = [
+  "marimo-anywidget",
+  "marimo-json-output",
+  "marimo-mime-renderer",
+  "marimo-table",
+  "marimo-ui-element"
+].join(",");
+var runtimeOwnedContainerSelector = [
+  "marimo-accordion",
+  "marimo-carousel",
+  "marimo-tabs"
+].join(",");
+var runtimeOwnedOutputPattern = /marimo-(anywidget|json-output|table|ui-element)|\\u003cmarimo-(anywidget|json-output|table|ui-element)/i;
+var hasRuntimeOwnedAttribute = (node) => {
+  return Array.from(node.attributes).some((attribute) => runtimeOwnedOutputPattern.test(attribute.value));
+};
+var shouldDeferRuntimeOwnedNode = (node) => {
+  if (node.tagName === "MARIMO-MIME-RENDERER") {
+    return hasRuntimeOwnedAttribute(node);
+  }
+  if (node.tagName !== "MARIMO-UI-ELEMENT") return true;
+  return node.querySelector("marimo-code-editor") === null;
+};
+var shouldDeferRuntimeOwnedContainer = (node) => {
+  if (hasRuntimeOwnedAttribute(node)) return true;
+  return Array.from(node.querySelectorAll(runtimeOwnedOutputSelector)).some(shouldDeferRuntimeOwnedNode);
+};
+var deferRuntimeOwnedOutput = (root) => {
+  root.querySelectorAll(runtimeOwnedContainerSelector).forEach((node) => {
+    if (shouldDeferRuntimeOwnedContainer(node)) node.remove();
+  });
+  root.querySelectorAll(runtimeOwnedOutputSelector).forEach((node) => {
+    if (shouldDeferRuntimeOwnedNode(node)) node.remove();
+  });
+};
 var observeSuppressedMimeRenderers = (root, mimetypes) => {
   suppressMimeRenderers(root, mimetypes);
   if (mimetypes.length === 0) return () => {
@@ -1001,114 +1314,6 @@ var observeSuppressedMimeRenderers = (root, mimetypes) => {
     subtree: true
   });
   return () => observer.disconnect();
-};
-var containsMarimoUiElement = (node) => {
-  return [
-    "data-data",
-    "data-json-data"
-  ].map((name) => node.getAttribute(name) ?? "").some((value) => value.includes("marimo-ui-element"));
-};
-var displayRuntimeSelector = "marimo-table, marimo-json-output, marimo-mime-renderer";
-var isDisplayCodeEditor = (node) => {
-  return node.matches("marimo-ui-element") && Boolean(node.querySelector("marimo-code-editor"));
-};
-var shouldDeferServerRuntimeElement = (node) => {
-  if (isDisplayCodeEditor(node)) {
-    return false;
-  }
-  if (node.matches("marimo-anywidget, marimo-ui-element, marimo-table")) {
-    return true;
-  }
-  if (node.matches("marimo-mime-renderer, marimo-json-output")) {
-    return containsMarimoUiElement(node);
-  }
-  return false;
-};
-var hasDeferredRuntimeAncestor = (node) => {
-  return Boolean(node.parentElement?.closest(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`));
-};
-var staticTextWithoutRuntimeElements = (node) => {
-  const clone = node.cloneNode(true);
-  if (!(clone instanceof Element)) return "";
-  clone.querySelectorAll(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`).forEach((child) => child.remove());
-  return clone.textContent.trim();
-};
-var hasDisplayRuntimeElement = (node) => {
-  if (node.matches(displayRuntimeSelector)) return true;
-  return Boolean(node.querySelector(displayRuntimeSelector));
-};
-var hasOnlyDisplayRuntimeElements = (node) => {
-  const runtimeElements = Array.from(node.querySelectorAll(runtimeElementSelector));
-  if (node.matches(runtimeElementSelector)) {
-    runtimeElements.unshift(node);
-  }
-  return runtimeElements.length > 0 && runtimeElements.every((element) => element.matches(displayRuntimeSelector) || Boolean(element.querySelector(displayRuntimeSelector)));
-};
-var canUsePendingPreview = (node) => {
-  if (node.matches("marimo-anywidget")) return false;
-  if (node.matches("marimo-table") || node.querySelector("marimo-table")) {
-    return false;
-  }
-  if (!node.matches(`${runtimeElementSelector}, ${nestedRuntimeContainerSelector}`)) {
-    return !node.querySelector(runtimeElementSelector);
-  }
-  if (staticTextWithoutRuntimeElements(node)) return true;
-  if (hasOnlyDisplayRuntimeElements(node)) return true;
-  return hasDisplayRuntimeElement(node) && !node.matches("marimo-ui-element");
-};
-var runtimePlaceholderPolicy = (node) => {
-  if (node.closest("marimo-island")) return "remove";
-  return canUsePendingPreview(node) ? "preview" : "skeleton";
-};
-var pendingStatusNode = () => {
-  const node = document.createElement("div");
-  node.className = pendingStatusClass;
-  node.setAttribute("role", "status");
-  node.textContent = "Preparing live output";
-  return node;
-};
-var replaceWithPendingPreview = (node) => {
-  const policy = runtimePlaceholderPolicy(node);
-  if (policy === "remove") {
-    node.remove();
-    return;
-  }
-  const wrapper = document.createElement("div");
-  wrapper.className = pendingClass;
-  wrapper.setAttribute("aria-busy", "true");
-  wrapper.setAttribute("aria-disabled", "true");
-  wrapper.inert = true;
-  if (policy === "preview") {
-    const preview = document.createElement("div");
-    preview.className = previewClass;
-    wrapper.append(preview, pendingStatusNode(), loadingNode());
-    node.replaceWith(wrapper);
-    preview.append(node);
-  } else {
-    wrapper.append(loadingNode());
-    node.replaceWith(wrapper);
-  }
-};
-var deferServerRuntimeElements = (fragment) => {
-  fragment.querySelectorAll(runtimeElementSelector).forEach((node) => {
-    if (hasDeferredRuntimeAncestor(node)) return;
-    if (!shouldDeferServerRuntimeElement(node)) return;
-    replaceWithPendingPreview(node);
-  });
-};
-var deferNestedServerRuntimeElements = (fragment) => {
-  fragment.querySelectorAll(nestedRuntimeContainerSelector).forEach((node) => {
-    if (hasDeferredRuntimeAncestor(node)) return;
-    if (!node.innerHTML.includes("marimo-ui-element")) return;
-    replaceWithPendingPreview(node);
-  });
-};
-var hasVisiblePreview = (wrapper) => {
-  const preview = wrapper.querySelector(`:scope > .${previewClass}`);
-  if (!(preview instanceof HTMLElement)) return false;
-  if (preview.textContent.trim()) return true;
-  const rect = preview.getBoundingClientRect();
-  return rect.width > 1 && rect.height > 1;
 };
 var rootIsConnected = (root) => {
   if (root instanceof Document) return true;
@@ -1129,24 +1334,6 @@ var scheduleConnectedDomChecks = (root, callback, delays) => {
     cancelAnimationFrame(frame);
     timeouts.forEach(clearTimeout);
   };
-};
-var refreshPendingPreviews = (root) => {
-  root.querySelectorAll(`.${pendingClass}`).forEach((wrapper) => {
-    if (!(wrapper instanceof HTMLElement)) return;
-    if (hasVisiblePreview(wrapper)) {
-      wrapper.dataset.hasPreview = "true";
-    } else {
-      delete wrapper.dataset.hasPreview;
-    }
-  });
-};
-var schedulePendingPreviews = (root) => {
-  return scheduleConnectedDomChecks(root, () => refreshPendingPreviews(root), [
-    100,
-    500,
-    1500,
-    3e3
-  ]);
 };
 var cellIdFromIsland = (island) => {
   try {
@@ -1200,16 +1387,6 @@ var createLightDomMount = (el) => {
   mount.className = outputClass;
   host.appendChild(mount);
   return mount;
-};
-var loadingNode = () => {
-  const node = document.createElement("div");
-  node.className = loadingClass;
-  node.setAttribute("role", "status");
-  node.setAttribute("aria-label", "Loading marimo output");
-  for (let index = 0; index < 3; index += 1) {
-    node.appendChild(document.createElement("span"));
-  }
-  return node;
 };
 var runtimeError = (error) => {
   const details = document.createElement("details");
@@ -1537,25 +1714,26 @@ var ensureMolabActionStyle = (doc) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-right: 0.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0 0.25rem 0 0;
+  color: inherit;
   line-height: 1;
   vertical-align: middle;
 }
 
 .myst-fm-molab-icon {
-  display: inline-block;
-  width: 1.125rem;
-  height: 1.125rem;
-  color: #666666;
-  opacity: 0.75;
-  transition: color 120ms ease, opacity 120ms ease;
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  color: currentColor;
+  opacity: 0.6;
+  transition: opacity 120ms ease;
 }
 
 .myst-fm-molab-link:hover .myst-fm-molab-icon,
 .myst-fm-molab-link:focus-visible .myst-fm-molab-icon {
-  color: #397262;
   opacity: 1;
 }
 
@@ -1646,6 +1824,42 @@ function ensureMolabPageAction({ notebookCodeSource, fallbackReason = "", target
 }
 
 // widget/container-widget.ts
+var appIslandCount = (appId) => {
+  return Array.from(document.querySelectorAll("marimo-island[data-reactive='true']")).filter((island) => island.getAttribute("data-app-id") === appId).length;
+};
+var waitForAppIslands = (appId, expectedCount) => {
+  if (!appId || expectedCount <= 0 || appIslandCount(appId) >= expectedCount) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      observer.disconnect();
+      timeouts.forEach(clearTimeout);
+      resolve();
+    };
+    const check = () => {
+      if (appIslandCount(appId) >= expectedCount) finish();
+    };
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    const timeouts = [
+      0,
+      16,
+      50,
+      100,
+      250,
+      500,
+      1e3,
+      3e3
+    ].map((delay) => setTimeout(delay === 3e3 ? finish : check, delay));
+  });
+};
 var mountMarimo = (model, el) => {
   const output = readOutputModel(model);
   const mount = createLightDomMount(el);
@@ -1660,19 +1874,15 @@ var mountMarimo = (model, el) => {
   };
   let releaseCellContainers = () => {
   };
-  let releasePendingPreviews = () => {
-  };
   let releaseMolabAction = () => {
   };
   stripHeadOnlyNodes(output.body);
   suppressMimeRenderers(output.body, output.suppressMimetypes);
-  deferNestedServerRuntimeElements(output.body);
-  deferServerRuntimeElements(output.body);
+  deferRuntimeOwnedOutput(output.body);
   ensureThemeStyle();
   ensureCustomStyleBlocks(document, output.customStyleBlocks);
   ensureCustomStylesheets(document, output.customStylesheets);
   ensureDocumentNavigation();
-  const hasRuntime = Boolean(output.appId) || hasRuntimePayload(output);
   const hasPayload = hasRuntimePayload(output);
   const bodyIsEmpty = isOutputBodyEmpty(output);
   const notebookCodeSource = firstNotebookCodeSource(notebookCodeFromValue(output.molabNotebookCode), notebookCodeFromValue(output.notebookCode), notebookCodeFromExportContext(), notebookCodeFromDom(output.appId));
@@ -1681,9 +1891,6 @@ var mountMarimo = (model, el) => {
     releaseMimeObserver = observeSuppressedMimeRenderers(mount, output.suppressMimetypes);
     releaseTheme = scheduleShadowTheme(mount, output.customStylesheets, output.customStyleBlocks);
     releaseCellContainers = scheduleIslandCellContainers(mount);
-    releasePendingPreviews = schedulePendingPreviews(mount);
-  } else if (hasRuntime) {
-    mount.replaceChildren(loadingNode());
   } else {
     mount.replaceChildren();
   }
@@ -1700,6 +1907,8 @@ var mountMarimo = (model, el) => {
         releaseCode = retainNotebookCode(output.appId, output.notebookCode);
       }
       if (output.appId && hasPayload) {
+        await waitForAppIslands(output.appId, output.runtimeCellCount);
+        if (cancelled) return;
         releaseAppRecord = retainApp(output.appId, output.notebookCode, output.assets);
       } else if (output.appId) {
         appRecord(output.appId);
@@ -1724,7 +1933,6 @@ var mountMarimo = (model, el) => {
     releaseMimeObserver();
     releaseTheme();
     releaseCellContainers();
-    releasePendingPreviews();
     releaseMolabAction();
     mount.remove();
   };

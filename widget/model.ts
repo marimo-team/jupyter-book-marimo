@@ -10,6 +10,7 @@ export type LinkAttributes = Record<string, string>;
 export type RuntimeAssets = {
   links: LinkAttributes[];
   moduleScripts: string[];
+  version?: string;
 };
 
 export type StyleBlock = {
@@ -27,6 +28,7 @@ export type OutputModel = {
   customStylesheets: string[];
   customStyleBlocks: StyleBlock[];
   suppressMimetypes: string[];
+  runtimeCellCount: number;
   widgetConfig: WidgetConfig;
 };
 
@@ -120,6 +122,19 @@ const getBoolean = (value: unknown, fallback: boolean): boolean => {
   return fallback;
 };
 
+const getModelNumber = (
+  model: AnyWidgetModel | unknown,
+  key: string,
+): number => {
+  const value = getModelValue(model, key, 0);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
 const recordFrom = (value: unknown): Record<string, unknown> => {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
 };
@@ -187,7 +202,7 @@ const assetsFromModel = (
   model: AnyWidgetModel | unknown,
   head: ParentNode,
 ): RuntimeAssets => {
-  // Prefer structured assets from Python; fall back to old head HTML payloads.
+  // Prefer structured assets from Python. Accept head HTML from earlier models.
   const assets = getModelValue(model, "assets", {});
   const record = assets && typeof assets === "object"
     ? assets as Record<string, unknown>
@@ -197,6 +212,7 @@ const assetsFromModel = (
     moduleScripts: validModuleScriptList(record.moduleScripts)
       ? record.moduleScripts
       : modulesFromFragment(head),
+    version: typeof record.version === "string" ? record.version : undefined,
   };
 };
 
@@ -239,6 +255,7 @@ export const readOutputModel = (model: AnyWidgetModel | unknown): OutputModel =>
     customStylesheets: getModelStringList(model, "customStylesheets"),
     customStyleBlocks: getModelStyleBlocks(model),
     suppressMimetypes: getModelStringList(model, "suppressMimetypes"),
+    runtimeCellCount: getModelNumber(model, "runtimeCellCount"),
     widgetConfig: widgetConfigFromModel(model),
   };
 };

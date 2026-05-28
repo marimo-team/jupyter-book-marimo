@@ -1,24 +1,23 @@
 from __future__ import annotations
 
 from jupyter_book_marimo.authoring import (
-    DEFAULT_EXECUTION_OPTIONS,
     resolved_execution_options,
     should_display_code,
     should_display_output,
+    should_display_server_output,
     should_execute,
     should_include,
 )
 
 
-def test_default_execution_option_vocabulary_is_implemented_public_api() -> None:
-    assert tuple(DEFAULT_EXECUTION_OPTIONS) == (
-        "eval",
-        "echo",
-        "output",
-        "error",
-        "include",
-        "editor",
-    )
+def test_missing_execution_options_use_authoring_defaults() -> None:
+    config = resolved_execution_options({}, {})
+
+    assert should_execute(config) is True
+    assert should_include(config) is True
+    assert should_display_output(config) is True
+    assert should_display_server_output(config) is True
+    assert should_display_code(config) is False
 
 
 def test_cell_execution_options_override_document_options() -> None:
@@ -39,6 +38,14 @@ def test_include_controls_rendering_not_execution() -> None:
     assert should_execute(config) is True
     assert should_display_code(config) is False
     assert should_display_output(config) is False
+    assert should_display_server_output(config) is False
+
+
+def test_server_output_false_only_disables_server_rendered_html() -> None:
+    config = resolved_execution_options({}, {"server-output": False})
+
+    assert should_display_output(config) is True
+    assert should_display_server_output(config) is False
 
 
 def test_disabled_and_unparsable_skip_execution() -> None:

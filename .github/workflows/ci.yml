@@ -19,14 +19,8 @@ jobs:
       - name: Install Python
         run: uv python install "$(cat .python-version)"
 
-      - name: Check formatting
-        run: make format-check
-
-      - name: Lint
+      - name: Lint and type-check
         run: make lint
-
-      - name: Type-check
-        run: make typecheck
 
   test:
     runs-on: ubuntu-latest
@@ -48,14 +42,10 @@ jobs:
       - name: Run tests
         env:
           UV_PYTHON: ${{ matrix.python-version }}
-        run: make test
+        run: uv run pytest tests
 
-  build:
+  widget:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -65,28 +55,26 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install Python
-        run: uv python install "${{ matrix.python-version }}"
+        run: uv python install "$(cat .python-version)"
 
-      - name: Build package
-        env:
-          UV_PYTHON: ${{ matrix.python-version }}
-        run: make build
+      - name: Run widget tests
+        run: uv run deno test widget
 
-      - name: Smoke test wheel assets
-        run: |
-          wheel="$(ls dist/jupyter_book_marimo-*-py3-none-any.whl)"
-          tmp="$(mktemp -d)"
-          uv venv --python "${{ matrix.python-version }}" "$tmp/.venv"
-          uv pip install --python "$tmp/.venv/bin/python" "$wheel"
-          "$tmp/.venv/bin/python" - <<'PY'
-          from importlib.resources import files
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-          asset = files("jupyter_book_marimo.assets").joinpath("container-widget.mjs")
-          source = asset.read_text()
-          assert "widget/container-widget.ts" in source
-          assert "marimo-jupyter-book-pending" in source
-          assert "export {" in source
-          PY
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install "$(cat .python-version)"
+
+      - name: Build and smoke test package artifacts
+        run: make package-smoke
 
   book-build:
     runs-on: ubuntu-latest

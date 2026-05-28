@@ -1,53 +1,36 @@
-JBM_STYLESHEETS ?= styles/jupyter-book-marimo.css
-WIDGET_SRC_DIR := widget
-WIDGET_ENTRY := $(WIDGET_SRC_DIR)/container-widget.ts
+JBM_STYLESHEETS ?=
+PYTHON_PATHS := src tests scripts
+DENO_FORMAT_PATHS := deno.json widget README.md CONTRIBUTING.md releasing.md .github/pull_request_template.md docs/index.md docs/api docs/myst.yml docs/styles/jupyter-book-marimo.css
+WIDGET_ENTRY := widget/container-widget.ts
 WIDGET_BUNDLE := src/jupyter_book_marimo/assets/container-widget.mjs
 
-.PHONY: format format-check lint typecheck docs-format docs-format-check widget-format widget-format-check widget-lint widget-typecheck widget-test widget-build widget-build-check test check build book-build book-start clean
+.PHONY: format lint test check release-check build package-smoke widget-build book-build book-start clean
 
 format:
-	uv run ruff format src tests scripts
-	uv run deno task docs:fmt
-	uv run deno task widget:fmt
-
-format-check:
-	uv run ruff format --check src tests scripts
-	uv run deno task docs:fmt-check
-	uv run deno task widget:fmt-check
+	uv run ruff format $(PYTHON_PATHS)
+	uv run deno fmt $(DENO_FORMAT_PATHS)
 
 lint:
-	uv run ruff check src tests scripts
-	uv run deno task widget:lint
-
-typecheck:
+	uv run ruff format --check $(PYTHON_PATHS)
+	uv run ruff check $(PYTHON_PATHS)
 	uv run ty check src scripts
-	uv run deno task widget:check
-
-docs-format:
-	uv run deno task docs:fmt
-
-docs-format-check:
-	uv run deno task docs:fmt-check
-
-widget-format:
-	uv run deno task widget:fmt
-
-widget-format-check:
-	uv run deno task widget:fmt-check
-
-widget-lint:
-	uv run deno task widget:lint
-
-widget-typecheck:
-	uv run deno task widget:check
-
-widget-test:
-	uv run deno task widget:test
+	uv run deno fmt --check $(DENO_FORMAT_PATHS)
+	uv run deno lint widget
+	uv run deno check $(WIDGET_ENTRY)
 
 widget-build:
 	uv run python scripts/bundle_widget.py
 
-widget-build-check:
+test:
+	uv run pytest tests
+	uv run deno test widget
+
+check: lint test build package-smoke book-build
+
+release-check: check
+
+build:
+	rm -f dist/jupyter_book_marimo-*.whl dist/jupyter_book_marimo-*.tar.gz
 	@tmp=$$(mktemp); \
 	uv run python scripts/bundle_widget.py "$$tmp"; \
 	if ! cmp -s "$$tmp" "$(WIDGET_BUNDLE)"; then \
@@ -56,15 +39,10 @@ widget-build-check:
 		exit 1; \
 	fi; \
 	rm -f "$$tmp"
-
-test:
-	uv run pytest tests
-	uv run deno task widget:test
-
-check: format-check lint typecheck test build
-
-build: widget-build-check
 	uv build
+
+package-smoke: build
+	uv run python scripts/smoke_package.py
 
 book-build:
 	cd docs && JUPYTER_BOOK_MARIMO_STYLESHEETS="$(JBM_STYLESHEETS)" uv run jupyter-book build --html --strict
@@ -74,4 +52,4 @@ book-start:
 
 clean:
 	rm -rf dist _build _site .jupyter-book-marimo docs/_build docs/_site docs/.jupyter-book-marimo
-	find src tests -type d -name __pycache__ -prune -exec rm -rf {} +
+	find $(PYTHON_PATHS) -type d -name __pycache__ -prune -exec rm -rf {} +

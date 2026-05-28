@@ -37,6 +37,7 @@ def test_marimo_directive_normalizes_canonical_kebab_case_options() -> None:
                 "query": "rows",
                 "hide-output": True,
                 "hide-code": True,
+                "server-output": False,
                 "column": 2,
             },
         )
@@ -47,23 +48,19 @@ def test_marimo_directive_normalizes_canonical_kebab_case_options() -> None:
         "query": "rows",
         "hide_output": True,
         "hide_code": True,
+        "server_output": False,
         "column": 2,
     }
 
 
-def test_marimo_directive_rejects_unknown_language() -> None:
-    with pytest.raises(ValueError, match="Unsupported marimo language"):
+def test_marimo_directive_requires_known_language() -> None:
+    with pytest.raises(ValueError, match="marimo language must be one of"):
         cell_from_directive(directive("py"))
 
 
 def test_marimo_directive_rejects_unknown_option() -> None:
     with pytest.raises(ValueError, match="Unsupported marimo option"):
         cell_from_directive(directive(options={"hide_code": True}))
-
-
-def test_marimo_directive_rejects_unimplemented_warning_option() -> None:
-    with pytest.raises(ValueError, match="Unsupported marimo option"):
-        cell_from_directive(directive(options={"warning": False}))
 
 
 def test_marimo_directive_rejects_sql_options_on_python() -> None:
@@ -82,6 +79,7 @@ def test_marimo_config_directive_uses_canonical_options() -> None:
             "name": "marimo-config",
             "options": {
                 "eval": False,
+                "server-output": False,
                 "external-env": True,
                 "header": "import marimo as mo",
                 "molab": False,
@@ -91,6 +89,7 @@ def test_marimo_config_directive_uses_canonical_options() -> None:
 
     assert config == {
         "eval": False,
+        "server_output": False,
         "external_env": True,
         "header": "import marimo as mo",
         "molab": False,
@@ -104,7 +103,7 @@ def test_marimo_config_rejects_pyproject_with_external_env() -> None:
                 "name": "marimo-config",
                 "options": {
                     "external-env": True,
-                    "pyproject": 'dependencies = ["marimo"]',
+                    "pyproject": 'dependencies = ["pandas"]',
                 },
             }
         )

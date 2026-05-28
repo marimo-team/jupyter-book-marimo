@@ -1,8 +1,9 @@
-"""Translate MyST marimo directives into anywidget-backed islands.
+"""Register the MyST executable plugin and transform marimo document nodes.
 
-The plugin owns document-tree concerns: validating executable directive output,
-invoking the runtime extractor once per page, copying the bridge asset, and
-replacing marimo nodes with widget nodes.
+Jupyter Book calls this module to discover directives and run the document
+transform. The transform collects `{marimo}` cells, resolves page source
+context, invokes the extractor once, and replaces each cell node with an
+anywidget node.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 from shutil import copyfileobj
 import sys
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from .authoring import (
     Cell,
@@ -126,19 +128,19 @@ def source_path_for_cells(
     *,
     root: Path | None = None,
 ) -> Path | None:
-    """Find the current source page without parsing cell options/config.
+    """Locate the current source page by matching parsed directive bodies.
 
-    MyST executable transforms do not currently pass a clean source filename to
-    Python plugins. The extractor still benefits from the path for stable app
-    IDs and relative file access, so this locator scores source files by the
-    directive bodies that MyST already parsed for us.
+    MyST executable transforms pass node positions without a source filename. The
+    extractor uses the resolved page path for app IDs, Molab export, and relative file
+    access.
     """
     if not cells:
         return None
 
+    search_root = (root or Path.cwd()).resolve()
     best_paths: list[Path] = []
     best_score = 0
-    for path in source_files((root or Path.cwd()).resolve()):
+    for path in source_files(search_root):
         try:
             source = path.read_text(encoding="utf-8")
         except OSError:
@@ -162,12 +164,22 @@ def synthetic_filename(cells: list[Cell]) -> str:
     return f"jupyter-book-marimo-{digest}.md"
 
 
+def book_source_root(path: Path | None) -> Path:
+    """Return the book source root for a resolved source page."""
+    if path is None:
+        return Path.cwd()
+    for parent in (path.parent, *path.parents):
+        if (parent / "myst.yml").exists() or (parent / "_toc.yml").exists():
+            return parent
+    return Path.cwd()
+
+
 def source_identity(path: Path | None, cells: list[Cell]) -> str:
     """Prefer a repo-relative page identity so browser app IDs are stable."""
     if path is None:
         return synthetic_filename(cells)
     try:
-        return str(path.relative_to(Path.cwd()))
+        return str(path.relative_to(book_source_root(path)))
     except ValueError:
         return str(path)
 
@@ -209,31 +221,45 @@ def is_external_stylesheet(value: str) -> bool:
     return value.startswith(("http://", "https://"))
 
 
+def is_file_stylesheet(value: str) -> bool:
+    return value.startswith("file://")
+
+
+def embedded_style_block(source: Path) -> dict[str, str]:
+    if not source.is_file():
+        raise ValueError(f"Custom stylesheet is not a file: {source}")
+
+    content = source.read_text(encoding="utf-8")
+    digest = hashlib.sha1(content.encode("utf-8")).hexdigest()[:12]
+    return {"id": f"{safe_asset_stem(source)}-{digest}", "css": content}
+
+
 def custom_style_asset(stylesheet: str) -> tuple[str | None, dict[str, str] | None]:
-    """Classify custom stylesheets by how the built book can serve them.
+    """Resolve a custom stylesheet into a served href or embedded CSS block.
 
     External URLs and root-relative book paths stay as hrefs. Local files are
     embedded into the widget model so the bridge can inject them into marimo
-    shadow roots without depending on another static asset path.
+    shadow roots from the same model payload.
     """
     if not stylesheet:
         raise ValueError("Stylesheet path cannot be empty")
 
-    source = Path(stylesheet).expanduser()
     if is_external_stylesheet(stylesheet):
         return stylesheet, None
-    if stylesheet.startswith("/") and not source.exists():
+    if is_file_stylesheet(stylesheet):
+        source = Path(unquote(urlparse(stylesheet).path)).expanduser()
+        if not source.exists():
+            raise FileNotFoundError(f"Custom stylesheet not found: {stylesheet}")
+        return None, embedded_style_block(source)
+    if stylesheet.startswith("/"):
+        if (source := Path(stylesheet)).exists():
+            return None, embedded_style_block(source)
         return stylesheet, None
-    if not source.is_absolute():
-        source = Path.cwd() / source
+    source = Path(stylesheet).expanduser()
+    source = Path.cwd() / source
     if not source.exists():
         raise FileNotFoundError(f"Custom stylesheet not found: {stylesheet}")
-    if not source.is_file():
-        raise ValueError(f"Custom stylesheet is not a file: {stylesheet}")
-
-    content = source.read_text(encoding="utf-8")
-    digest = hashlib.sha1(content.encode("utf-8")).hexdigest()[:12]
-    return None, {"id": f"{safe_asset_stem(source)}-{digest}", "css": content}
+    return None, embedded_style_block(source)
 
 
 def custom_style_assets(
@@ -269,20 +295,20 @@ def stylesheets_from_env() -> tuple[str, ...]:
     return tuple(value.strip() for value in raw.split(",") if value.strip())
 
 
-def generated_dir() -> Path:
-    target_dir = Path.cwd() / GENERATED_DIR
+def generated_dir(source_path: Path | None = None) -> Path:
+    target_dir = book_source_root(source_path) / GENERATED_DIR
     target_dir.mkdir(exist_ok=True)
     return target_dir
 
 
 def generated_asset_url(filename: str) -> str:
-    """Return the source-relative URL MyST will fingerprint into the build."""
+    """Return the source-relative asset URL consumed by MyST."""
     return f"/{GENERATED_DIR}/{filename}"
 
 
-def widget_esm() -> str:
-    """Copy the bridge into docs and return the anywidget ESM source URL."""
-    target_dir = generated_dir()
+def widget_esm(source_path: Path | None = None) -> str:
+    """Copy the packaged bridge into the book and return its ESM URL."""
+    target_dir = generated_dir(source_path)
     target = target_dir / CONTAINER_WIDGET
     source = files("jupyter_book_marimo.assets").joinpath(CONTAINER_WIDGET)
     with source.open("rb") as source_file:
@@ -298,10 +324,11 @@ def output_node(
     index: int,
     source: str,
     position: dict[str, Any] | None,
+    source_path: Path | None = None,
     custom_stylesheets: list[str] | None = None,
     custom_style_blocks: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Build the MyST anywidget node that carries one extractor output."""
+    """Return the MyST anywidget node for one extractor output."""
     if not isinstance(output, dict) or not isinstance(output.get("html"), str):
         digest = hashlib.sha1(source.encode("utf-8")).hexdigest()[:8]
         raise RuntimeError(f"Missing marimo output {index} ({digest})")
@@ -311,9 +338,13 @@ def output_node(
         model["customStylesheets"] = custom_stylesheets
     if custom_style_blocks:
         model["customStyleBlocks"] = custom_style_blocks
+    widget_id_digest = hashlib.sha1(
+        f"{model.get('appId', '')}\0{index}\0{source}".encode("utf-8")
+    ).hexdigest()[:12]
     return {
         "type": "anywidget",
-        "esm": widget_esm(),
+        "id": f"jupyter-book-marimo-{index}-{widget_id_digest}",
+        "esm": widget_esm(source_path),
         "model": model,
         "class": WIDGET_CLASS,
         "position": position,
@@ -405,6 +436,7 @@ def transform_document(
             index,
             item.cell.code,
             item.cell.position,
+            document.source_path,
             custom_stylesheets,
             custom_style_blocks,
         )

@@ -1,7 +1,5 @@
-"""Generated browser assets copied into generated books.
+"""Package generated browser assets for the anywidget bridge.
 
-The Python plugin reads files from here and serves copies from the docs tree so
-anywidget can load the bridge as a same-origin ESM module. The maintained
-container widget source lives in the repository's top-level ``widget`` Deno
-project and is bundled into this package with Deno.
+The plugin reads these files as package resources and copies them into the book
+source tree. Jupyter Book then serves the bridge as a same-origin ESM module.
 """

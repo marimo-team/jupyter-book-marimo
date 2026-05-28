@@ -1,6 +1,7 @@
 {
   "version": "5",
   "specifiers": {
+    "npm:linkedom@*": "0.18.12",
     "npm:linkedom@0.18.12": "0.18.12",
     "npm:lz-string@*": "1.5.0",
     "npm:lz-string@1.5.0": "1.5.0"

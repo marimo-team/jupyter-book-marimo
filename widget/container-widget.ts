@@ -7,13 +7,10 @@ import {
 } from "./runtime.ts";
 import {
   createLightDomMount,
-  deferNestedServerRuntimeElements,
-  deferServerRuntimeElements,
-  loadingNode,
+  deferRuntimeOwnedOutput,
   observeSuppressedMimeRenderers,
   runtimeError,
   scheduleIslandCellContainers,
-  schedulePendingPreviews,
   stripHeadOnlyNodes,
   suppressMimeRenderers,
 } from "./output-dom.ts";
@@ -37,6 +34,41 @@ type RenderContext = {
   el: HTMLElement;
 };
 
+const appIslandCount = (appId: string): number => {
+  return Array.from(
+    document.querySelectorAll("marimo-island[data-reactive='true']"),
+  ).filter((island) => island.getAttribute("data-app-id") === appId).length;
+};
+
+const waitForAppIslands = (
+  appId: string,
+  expectedCount: number,
+): Promise<void> => {
+  if (!appId || expectedCount <= 0 || appIslandCount(appId) >= expectedCount) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      observer.disconnect();
+      timeouts.forEach(clearTimeout);
+      resolve();
+    };
+    const check = (): void => {
+      if (appIslandCount(appId) >= expectedCount) finish();
+    };
+
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const timeouts = [0, 16, 50, 100, 250, 500, 1000, 3000].map((delay) =>
+      setTimeout(delay === 3000 ? finish : check, delay)
+    );
+  });
+};
+
 const mountMarimo = (
   model: AnyWidgetModel | unknown,
   el: HTMLElement,
@@ -54,19 +86,16 @@ const mountMarimo = (
   let releaseMimeObserver: Release = () => {};
   let releaseTheme: Release = () => {};
   let releaseCellContainers: Release = () => {};
-  let releasePendingPreviews: Release = () => {};
   let releaseMolabAction: Release = () => {};
 
   stripHeadOnlyNodes(output.body);
   suppressMimeRenderers(output.body, output.suppressMimetypes);
-  deferNestedServerRuntimeElements(output.body);
-  deferServerRuntimeElements(output.body);
+  deferRuntimeOwnedOutput(output.body);
   ensureThemeStyle();
   ensureCustomStyleBlocks(document, output.customStyleBlocks);
   ensureCustomStylesheets(document, output.customStylesheets);
   ensureDocumentNavigation();
 
-  const hasRuntime = Boolean(output.appId) || hasRuntimePayload(output);
   const hasPayload = hasRuntimePayload(output);
   const bodyIsEmpty = isOutputBodyEmpty(output);
   const notebookCodeSource = firstNotebookCodeSource(
@@ -88,9 +117,6 @@ const mountMarimo = (
       output.customStyleBlocks,
     );
     releaseCellContainers = scheduleIslandCellContainers(mount);
-    releasePendingPreviews = schedulePendingPreviews(mount);
-  } else if (hasRuntime) {
-    mount.replaceChildren(loadingNode());
   } else {
     mount.replaceChildren();
   }
@@ -109,6 +135,8 @@ const mountMarimo = (
       }
 
       if (output.appId && hasPayload) {
+        await waitForAppIslands(output.appId, output.runtimeCellCount);
+        if (cancelled) return;
         releaseAppRecord = retainApp(
           output.appId,
           output.notebookCode,
@@ -144,7 +172,6 @@ const mountMarimo = (
     releaseMimeObserver();
     releaseTheme();
     releaseCellContainers();
-    releasePendingPreviews();
     releaseMolabAction();
     mount.remove();
   };

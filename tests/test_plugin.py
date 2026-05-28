@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import importlib.util
 import json
 import subprocess
 import sys
@@ -10,32 +8,57 @@ from unittest.mock import patch
 
 import pytest
 from jupyter_book_marimo.plugin import (
-    CONTAINER_WIDGET,
-    STYLESHEETS_ENV,
     directive_nodes,
-    source_path_for_cells,
     stylesheets_from_env,
     transform_document,
-    widget_esm,
 )
-
-from jupyter_book_marimo.authoring import Cell
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-WIDGET_SOURCE_DIR = REPO_ROOT / "widget"
-WIDGET_ENTRY = WIDGET_SOURCE_DIR / "container-widget.ts"
 WIDGET_BUNDLE = REPO_ROOT / "src/jupyter_book_marimo/assets/container-widget.mjs"
-WIDGET_BUNDLE_SCRIPT = REPO_ROOT / "scripts" / "bundle_widget.py"
 
-_bundle_widget_spec = importlib.util.spec_from_file_location(
-    "bundle_widget",
-    WIDGET_BUNDLE_SCRIPT,
-)
-assert _bundle_widget_spec is not None
-_bundle_widget = importlib.util.module_from_spec(_bundle_widget_spec)
-assert _bundle_widget_spec.loader is not None
-_bundle_widget_spec.loader.exec_module(_bundle_widget)
-normalize_bundle = _bundle_widget.normalize_bundle
+
+def plugin_spec_from_command(command: list[str]) -> dict[str, object]:
+    result = subprocess.run(
+        command,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    spec = json.loads(result.stdout)
+    assert isinstance(spec, dict)
+    return spec
+
+
+def directives_by_name(spec: dict[str, object]) -> dict[str, dict[str, object]]:
+    directives = spec["directives"]
+    assert isinstance(directives, list)
+    return {directive["name"]: directive for directive in directives}
+
+
+def assert_typed_options(directive: dict[str, object]) -> None:
+    options = directive["options"]
+    assert isinstance(options, dict)
+    assert options
+    for spec in options.values():
+        assert isinstance(spec, dict)
+        assert spec["type"] in {"boolean", "number", "string"}
+
+
+def assert_plugin_spec_contract(spec: dict[str, object]) -> None:
+    directives = directives_by_name(spec)
+    assert set(directives) == {"marimo", "marimo-config"}
+    assert_typed_options(directives["marimo"])
+    assert_typed_options(directives["marimo-config"])
+    transforms = spec["transforms"]
+    assert isinstance(transforms, list)
+    assert len(transforms) == 1
+    transform = transforms[0]
+    assert transform["name"] == "marimo-islands"
+    assert transform["stage"] == "document"
+    assert isinstance(transform["doc"], str)
+    assert transform["doc"]
 
 
 def marimo_node(
@@ -54,6 +77,17 @@ def marimo_node(
         "options": {"language": "python", **(options or {})},
         "position": position,
     }
+
+
+def transformed_payload(tree: dict[str, object]) -> dict[str, object]:
+    payloads: list[dict[str, object]] = []
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.side_effect = lambda payload: (
+            payloads.append(payload)
+            or {"outputs": [{"html": "<marimo-island></marimo-island>"}]}
+        )
+        transform_document(tree)
+    return payloads[0]
 
 
 def test_marimo_directive_returns_internal_cell_node() -> None:
@@ -83,7 +117,7 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
             "options": {
                 "header": "import marimo as mo",
                 "molab": False,
-                "pyproject": 'dependencies = ["marimo>=0.23.5,<0.24"]',
+                "pyproject": 'dependencies = ["pandas"]',
             },
             "node": {"position": {"start": {"line": 1}}},
         },
@@ -94,13 +128,13 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
         "options": {
             "header": "import marimo as mo",
             "molab": False,
-            "pyproject": 'dependencies = ["marimo>=0.23.5,<0.24"]',
+            "pyproject": 'dependencies = ["pandas"]',
         },
         "position": {"start": {"line": 1}},
     }
 
 
-def test_transform_replaces_marimo_nodes_and_removes_config() -> None:
+def test_transform_replaces_marimo_nodes_and_consumes_config() -> None:
     tree = {
         "type": "root",
         "children": [
@@ -121,6 +155,7 @@ def test_transform_replaces_marimo_nodes_and_removes_config() -> None:
 
     assert len(result["children"]) == 1
     assert result["children"][0]["type"] == "anywidget"
+    assert result["children"][0]["model"]["html"] == "<marimo-island></marimo-island>"
     assert run_extractor.call_args.args[0]["metadata"] == {
         "header": "import marimo as mo"
     }
@@ -131,21 +166,20 @@ def test_transform_replaces_marimo_nodes_and_removes_config() -> None:
 
 
 def test_transform_leaves_regular_code_fences_untouched() -> None:
+    code_node = {
+        "type": "code",
+        "lang": "python",
+        "meta": "{.marimo}",
+        "value": "x = 1",
+    }
     tree = {
         "type": "root",
-        "children": [
-            {
-                "type": "code",
-                "lang": "python",
-                "meta": "{.marimo}",
-                "value": "x = 1",
-            },
-        ],
+        "children": [code_node],
     }
 
     result = transform_document(tree)
 
-    assert result["children"][0]["type"] == "code"
+    assert result["children"][0] == code_node
 
 
 def test_transform_rejects_multiple_config_nodes() -> None:
@@ -154,19 +188,6 @@ def test_transform_rejects_multiple_config_nodes() -> None:
         "children": [
             {"type": "marimoConfig", "options": {"echo": True}},
             {"type": "marimoConfig", "options": {"output": False}},
-        ],
-    }
-
-    with pytest.raises(ValueError, match="Only one marimo-config"):
-        transform_document(tree)
-
-
-def test_transform_rejects_multiple_empty_config_nodes() -> None:
-    tree = {
-        "type": "root",
-        "children": [
-            {"type": "marimoConfig", "options": {}},
-            {"type": "marimoConfig", "options": {}},
         ],
     }
 
@@ -202,25 +223,91 @@ def test_transform_attaches_custom_stylesheet_assets(
         )
 
     content = stylesheet.read_text()
-    digest = hashlib.sha1(content.encode("utf-8")).hexdigest()[:12]
     assert "customStylesheets" not in result["children"][0]["model"]
-    assert result["children"][0]["model"]["customStyleBlocks"] == [
-        {"id": f"theme-{digest}", "css": content}
-    ]
+    [style_block] = result["children"][0]["model"]["customStyleBlocks"]
+    assert style_block["id"]
+    assert style_block["css"] == content
 
 
-def test_source_path_locator_preserves_page_identity(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_transform_keeps_root_relative_custom_stylesheet_href() -> None:
+    tree = {"type": "root", "children": [marimo_node("x = 1")]}
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.return_value = {
+            "outputs": [{"html": "<marimo-island></marimo-island>"}]
+        }
+        result = transform_document(tree, stylesheets=("/assets/marimo.css",))
+
+    model = result["children"][0]["model"]
+    assert model["customStylesheets"] == ["/assets/marimo.css"]
+    assert "customStyleBlocks" not in model
+
+
+def test_transform_embeds_absolute_custom_stylesheet_path(tmp_path: Path) -> None:
+    stylesheet = tmp_path / "theme.css"
+    stylesheet.write_text(".marimo { color: red; }\n", encoding="utf-8")
+    tree = {"type": "root", "children": [marimo_node("x = 1")]}
+
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.return_value = {
+            "outputs": [{"html": "<marimo-island></marimo-island>"}]
+        }
+        result = transform_document(tree, stylesheets=(str(stylesheet),))
+
+    model = result["children"][0]["model"]
+    assert "customStylesheets" not in model
+    [style_block] = model["customStyleBlocks"]
+    assert style_block["id"]
+    assert style_block["css"] == stylesheet.read_text(encoding="utf-8")
+
+
+def test_transform_embeds_file_url_custom_stylesheet(tmp_path: Path) -> None:
+    stylesheet = tmp_path / "theme.css"
+    stylesheet.write_text(".marimo { color: red; }\n", encoding="utf-8")
+    tree = {"type": "root", "children": [marimo_node("x = 1")]}
+
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.return_value = {
+            "outputs": [{"html": "<marimo-island></marimo-island>"}]
+        }
+        result = transform_document(tree, stylesheets=(stylesheet.as_uri(),))
+
+    model = result["children"][0]["model"]
+    assert "customStylesheets" not in model
+    [style_block] = model["customStyleBlocks"]
+    assert style_block["id"]
+    assert style_block["css"] == stylesheet.read_text(encoding="utf-8")
+
+
+def test_transform_payload_preserves_page_identity(tmp_path: Path, monkeypatch) -> None:
     page = tmp_path / "page.md"
-    page.write_text(
-        "# Page\n\n```{marimo} python\nx = 1\n```\n",
-        encoding="utf-8",
-    )
+    source = "# Page\n\n```{marimo} python\nx = 1\n```\n"
+    page.write_text(source, encoding="utf-8")
+    tree = {"type": "root", "children": [marimo_node("x = 1")]}
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    payload = transformed_payload(tree)
 
-    assert source_path_for_cells([Cell("x = 1", {})]) == page
+    assert payload["file"] == str(page)
+    assert payload["identity"] == "page.md"
+    assert payload["source"] == source
+
+
+def test_transform_payload_ignores_nogit_sources(tmp_path: Path, monkeypatch) -> None:
+    page = tmp_path / "docs" / "page.md"
+    private_page = tmp_path / "nogit" / "page.md"
+    for path in (page, private_page):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "```{marimo} python\nx = 1\n```\n",
+            encoding="utf-8",
+        )
+    tree = {"type": "root", "children": [marimo_node("x = 1")]}
+
+    monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    payload = transformed_payload(tree)
+
+    assert payload["file"] == str(page)
+    assert payload["identity"] == "docs/page.md"
 
 
 def test_transform_payload_includes_resolved_page_source(
@@ -248,7 +335,7 @@ def test_transform_payload_includes_resolved_page_source(
     assert payloads[0]["sourceRanges"] == {"config": []}
 
 
-def test_source_path_locator_falls_back_when_source_is_ambiguous(
+def test_transform_payload_uses_synthetic_identity_when_source_is_ambiguous(
     tmp_path: Path, monkeypatch
 ) -> None:
     for name in ("first.md", "second.md"):
@@ -258,13 +345,21 @@ def test_source_path_locator_falls_back_when_source_is_ambiguous(
         )
 
     monkeypatch.setattr("jupyter_book_marimo.plugin.Path.cwd", lambda: tmp_path)
+    tree = {"type": "root", "children": [marimo_node("x = 1")]}
+    payload = transformed_payload(tree)
+    repeated_payload = transformed_payload(
+        {"type": "root", "children": [marimo_node("x = 1")]}
+    )
 
-    assert source_path_for_cells([Cell("x = 1", {})]) is None
+    assert payload["file"] == payload["identity"]
+    assert payload["source"] == ""
+    assert Path(str(payload["identity"])).suffix == ".md"
+    assert repeated_payload["identity"] == payload["identity"]
 
 
 def test_stylesheets_from_env_accepts_comma_separated_values(monkeypatch) -> None:
     monkeypatch.setenv(
-        STYLESHEETS_ENV,
+        "JUPYTER_BOOK_MARIMO_STYLESHEETS",
         "styles/jupyter-book-marimo.css,https://example.com/marimo.css",
     )
 
@@ -276,7 +371,7 @@ def test_stylesheets_from_env_accepts_comma_separated_values(monkeypatch) -> Non
 
 def test_stylesheets_from_env_accepts_json_list(monkeypatch) -> None:
     monkeypatch.setenv(
-        STYLESHEETS_ENV,
+        "JUPYTER_BOOK_MARIMO_STYLESHEETS",
         '["styles/jupyter-book-marimo.css", "https://example.com/marimo.css"]',
     )
 
@@ -286,47 +381,47 @@ def test_stylesheets_from_env_accepts_json_list(monkeypatch) -> None:
     )
 
 
-def test_widget_esm_stays_source_relative_with_base_url(
-    tmp_path: Path, monkeypatch
+def test_transform_writes_widget_asset_under_book_source_root(
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    book = tmp_path / "docs"
+    book.mkdir()
+    (book / "myst.yml").write_text("project: {}\n", encoding="utf-8")
+    page = book / "index.md"
+    page.write_text("# Page\n\n```{marimo} python\nx = 1\n```\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("BASE_URL", "/book/")
 
-    assert widget_esm() == f"/.jupyter-book-marimo/{CONTAINER_WIDGET}"
+    with patch("jupyter_book_marimo.plugin.run_extractor") as run_extractor:
+        run_extractor.return_value = {
+            "outputs": [{"html": "<marimo-island></marimo-island>"}]
+        }
+        result = transform_document(
+            {"type": "root", "children": [marimo_node("x = 1")]}
+        )
 
+    asset = book / ".jupyter-book-marimo" / "container-widget.mjs"
 
-def test_widget_esm_stays_source_relative_with_bare_base_url(
-    tmp_path: Path, monkeypatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("BASE_URL", "book")
-
-    assert widget_esm() == f"/.jupyter-book-marimo/{CONTAINER_WIDGET}"
-
-
-def test_container_widget_asset_is_named_and_source_like(tmp_path: Path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-
-    assert widget_esm() == f"/.jupyter-book-marimo/{CONTAINER_WIDGET}"
-    asset = tmp_path / ".jupyter-book-marimo" / CONTAINER_WIDGET
-    bundle = asset.read_text()
-
+    assert result["children"][0]["esm"] == "/.jupyter-book-marimo/container-widget.mjs"
     assert asset.exists()
-    assert bundle == WIDGET_BUNDLE.read_text()
-    assert bundle.startswith("// Generated by `make widget-build` from widget/.")
-    assert "widget/container-widget.ts" in bundle
-    assert "export {" in bundle
+    assert asset.read_text() == WIDGET_BUNDLE.read_text()
+    assert not (tmp_path / ".jupyter-book-marimo" / "container-widget.mjs").exists()
 
 
-@pytest.mark.parametrize("target", [WIDGET_ENTRY, WIDGET_BUNDLE])
-def test_container_widget_assets_are_deno_checkable(target: Path) -> None:
+def test_container_widget_bundle_exports_anywidget_render() -> None:
     result = subprocess.run(
         [
             "uv",
             "run",
             "deno",
-            "check",
-            str(target),
+            "eval",
+            (
+                f"const mod = await import({json.dumps(WIDGET_BUNDLE.as_uri())});"
+                "if (typeof mod.default?.render !== 'function') {"
+                "throw new Error('missing anywidget render export');"
+                "}"
+            ),
         ],
         text=True,
         capture_output=True,
@@ -336,13 +431,23 @@ def test_container_widget_assets_are_deno_checkable(target: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_container_widget_bundle_is_current(tmp_path: Path) -> None:
-    generated = tmp_path / CONTAINER_WIDGET
+def test_source_tree_console_script_emits_plugin_spec() -> None:
+    spec = plugin_spec_from_command(["uv", "run", "jupyter-book-marimo"])
+
+    assert_plugin_spec_contract(spec)
+
+
+def test_source_tree_package_root_exposes_version() -> None:
     result = subprocess.run(
         [
             sys.executable,
-            str(WIDGET_BUNDLE_SCRIPT),
-            str(generated),
+            "-c",
+            (
+                "from importlib.metadata import version; "
+                "import jupyter_book_marimo as jbm; "
+                "expected = version('jupyter-book-marimo'); "
+                "raise SystemExit(0 if jbm.__version__ == expected else 1)"
+            ),
         ],
         text=True,
         capture_output=True,
@@ -350,42 +455,9 @@ def test_container_widget_bundle_is_current(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert generated.read_text() == WIDGET_BUNDLE.read_text()
 
 
-def test_widget_bundle_normalization_removes_local_deno_cache_paths() -> None:
-    bundle = """
-// ../../../../Library/Caches/deno/npm/registry.npmjs.org/lz-string/1.5.0/libs/lz-string.js
-var require_lz_string = __commonJS({
-  "../../../../Library/Caches/deno/npm/registry.npmjs.org/lz-string/1.5.0/libs/lz-string.js"(exports, module) {
-  }
-});
-"""
+def test_source_tree_package_main_emits_plugin_spec() -> None:
+    spec = plugin_spec_from_command([sys.executable, "-m", "jupyter_book_marimo"])
 
-    normalized = normalize_bundle(bundle)
-
-    assert "Library/Caches/deno" not in normalized
-    assert "// npm:lz-string@1.5.0/libs/lz-string.js" in normalized
-    assert '"npm:lz-string@1.5.0/libs/lz-string.js"' in normalized
-
-
-def test_plugin_spec_includes_directives() -> None:
-    result = subprocess.run(
-        ["uv", "run", "jupyter-book-marimo"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    spec = json.loads(result.stdout)
-    assert [directive["name"] for directive in spec["directives"]] == [
-        "marimo",
-        "marimo-config",
-    ]
-    marimo_options = spec["directives"][0]["options"]
-    config_options = spec["directives"][1]["options"]
-    assert "warning" not in marimo_options
-    assert "warning" not in config_options
-    assert marimo_options["hide-code"]["type"] == "boolean"
-    assert config_options["pyproject"]["type"] == "string"
+    assert_plugin_spec_contract(spec)

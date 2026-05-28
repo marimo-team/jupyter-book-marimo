@@ -4,16 +4,6 @@
     "linkedom": "npm:linkedom@0.18.12",
     "lz-string": "npm:lz-string@1.5.0"
   },
-  "tasks": {
-    "docs:fmt": "deno fmt docs/index.md docs/api docs/tutorials",
-    "docs:fmt-check": "deno fmt --check docs/index.md docs/api docs/tutorials",
-    "widget:fmt": "deno fmt deno.json widget",
-    "widget:fmt-check": "deno fmt --check deno.json widget",
-    "widget:lint": "deno lint widget",
-    "widget:check": "deno check widget/container-widget.ts",
-    "widget:test": "deno test widget",
-    "widget:bundle": "python scripts/bundle_widget.py"
-  },
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "es2022"],
     "strict": true

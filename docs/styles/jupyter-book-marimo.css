@@ -1,306 +1,37 @@
 /*
- * Example-book styling only.
+ * Optional docs stylesheet.
  *
- * The plugin bridge exposes variables and injects this stylesheet into marimo
- * shadow roots; selectors below are site/widget-specific polish, not public API.
+ * The bridge provides the --jbm-* variables. A book can pass this file through
+ * JUPYTER_BOOK_MARIMO_STYLESHEETS when it wants a small site-specific skin.
  */
 
+:host {
+  --background: var(--jbm-background);
+  --foreground: var(--jbm-foreground);
+  --card: var(--jbm-surface);
+  --card-foreground: var(--jbm-foreground);
+  --border: var(--jbm-border);
+  --input: var(--jbm-border);
+  --ring: var(--jbm-focus-ring);
+  --cm-background: var(--jbm-code-bg);
+  --cm-foreground: var(--jbm-code-fg);
+}
+
 :host([data-jb-theme="dark"]) {
-  --background: #1c1917;
-  --foreground: #d6d3d1;
-  --card: #292524;
-  --card-foreground: #d6d3d1;
-  --popover: #292524;
-  --popover-foreground: #d6d3d1;
-  --primary: #38bdf8;
-  --primary-foreground: #082f49;
-  --secondary: #44403c;
-  --secondary-foreground: #f5f5f4;
-  --muted: #0c0a09;
-  --muted-foreground: #a8a29e;
-  --accent: #334155;
-  --accent-foreground: #e0f2fe;
-  --border: rgba(168, 162, 158, 0.32);
-  --input: rgba(168, 162, 158, 0.38);
-  --ring: #38bdf8;
-  --cm-background: #1c1917;
-  --cm-comment: #a8a29e;
-  --jbm-cm-keyword: #f0abfc;
-  --jbm-cm-name: #bfdbfe;
-  --jbm-cm-literal: #86efac;
-  --jbm-cm-string: #fca5a5;
-  --jbm-cm-operator: #fdba74;
-  --jbm-cm-variable: #bae6fd;
-  --jbm-cm-definition: #c4b5fd;
-  --jbm-cm-property: #67e8f9;
-  --jbm-cm-punctuation: #99f6e4;
-  --jbm-cm-type: #93c5fd;
-  --jbm-cm-comment-token: #a8a29e;
-  --jbm-cm-invalid: #f87171;
-}
-
-.marimo-jupyter-book-output[data-jb-theme="dark"] :where(marimo-island.marimo) {
-  background: transparent !important;
-  color: #d6d3d1 !important;
-}
-
-.marimo-jupyter-book-output[data-jb-theme="dark"]
-  :where(
-    marimo-island.marimo,
-    marimo-island.marimo *
-  ) {
-  color: inherit !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.marimo) {
-  background: transparent !important;
-  color: #d6d3d1 !important;
   color-scheme: dark;
 }
 
-:host([data-jb-theme="dark"])
-  :where(
-    .marimo,
-    .markdown,
-    .text-foreground,
-    .text-muted-foreground,
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6,
-    p,
-    li,
-    summary,
-    button,
-    label
-  ) {
-  color: #d6d3d1 !important;
+:host([data-jb-theme="light"]) {
+  color-scheme: light;
 }
 
-:host([data-jb-theme="dark"])
-  :where(
-    .bg-background,
-    .bg-card,
-    .bg-white,
-    .marimo .bg-slate-50,
-    .marimo .bg-slate-100,
-    [class*="bg-background"],
-    [class*="bg-card"],
-    [class*="bg-white"]
-  ) {
-  background: #292524 !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .bg-muted,
-    .marimo .bg-slate-200,
-    [class*="bg-muted"]
-  ) {
-  background: rgba(168, 162, 158, 0.24) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(input, select, textarea) {
-  background: #292524 !important;
-  border-color: rgba(168, 162, 158, 0.38) !important;
-  color: #e7e5e4 !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .border-input,
-    .border-border,
-    [class*="border-input"],
-    [class*="border-border"]
-  ) {
-  border-color: rgba(168, 162, 158, 0.38) !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .cm-editor,
-    .cm-scroller,
-    .cm-content
-  ) {
-  background: #292524 !important;
-  color: #e7e5e4 !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-gutters) {
-  background: #1c1917 !important;
-  border-color: rgba(168, 162, 158, 0.32) !important;
-  color: #a8a29e !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-activeLine, .cm-activeLineGutter) {
-  background: rgba(120, 113, 108, 0.22) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-cursor) {
-  border-left-color: #e7e5e4 !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-selectionBackground) {
-  background: rgba(56, 189, 248, 0.26) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C b) {
-  color: var(--jbm-cm-keyword) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C c) {
-  color: var(--jbm-cm-name) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C d) {
-  color: var(--jbm-cm-literal) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C e) {
-  color: var(--jbm-cm-string) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C f) {
-  color: var(--jbm-cm-operator) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C g) {
-  color: var(--jbm-cm-name) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C h) {
-  color: var(--jbm-cm-definition) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C i) {
-  color: var(--jbm-cm-property) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C j) {
-  color: var(--jbm-cm-variable) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C k) {
-  color: var(--jbm-cm-punctuation) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C l) {
-  color: var(--jbm-cm-type) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C m) {
-  color: var(--jbm-cm-comment-token) !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.cm-line .\00037C n) {
-  color: var(--jbm-cm-invalid) !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light.marimo-json-output,
-    .json-viewer-theme-light.marimo-json-output *
-  ) {
-  color: #d6d3d1 !important;
-  opacity: 1 !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .data-key,
-    .json-viewer-theme-light .data-key-pair,
-    .json-viewer-theme-light .data-key-colon,
-    .json-viewer-theme-light .data-object,
-    .json-viewer-theme-light .data-object-start,
-    .json-viewer-theme-light .data-object-end,
-    .json-viewer-theme-light .data-key-toggle-collapsed,
-    .json-viewer-theme-light .data-key-toggle-expanded
-  ) {
-  color: #d6d3d1 !important;
-  opacity: 1 !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.json-viewer-theme-light .data-object) {
-  border-left-color: rgba(168, 162, 158, 0.42) !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .data-key-key,
-    .json-viewer-theme-light .data-key-key *
-  ) {
-  color: #38bdf8 !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .data-object-start,
-    .json-viewer-theme-light .data-object-start > span,
-    .json-viewer-theme-light .data-object-end,
-    .json-viewer-theme-light .data-object-end > span
-  ) {
-  color: #a8a29e !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .string-value,
-    .json-viewer-theme-light .string-value *,
-    .json-viewer-theme-light [class*="string"]
-  ) {
-  color: #fb923c !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .number-value,
-    .json-viewer-theme-light .number-value *,
-    .json-viewer-theme-light [class*="number"]
-  ) {
-  color: #c4b5fd !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .boolean-value,
-    .json-viewer-theme-light .boolean-value *,
-    .json-viewer-theme-light [class*="boolean"]
-  ) {
-  color: #f9a8d4 !important;
-}
-
-:host([data-jb-theme="dark"])
-  :where(
-    .json-viewer-theme-light .null-value,
-    .json-viewer-theme-light .null-value *,
-    .json-viewer-theme-light [class*="null"]
-  ) {
-  color: #a8a29e !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.admonition) {
-  background: #292524 !important;
-  border-color: rgba(168, 162, 158, 0.32) !important;
-  color: #d6d3d1 !important;
-}
-
-:host([data-jb-theme="dark"]) :where(.admonition-title) {
+:host :where(.marimo) {
   background: transparent !important;
-  color: #f5f5f4 !important;
+  color: var(--jbm-foreground) !important;
 }
 
-:host([data-jb-theme="dark"]) :where(code:not(pre code)) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f9a8d4 !important;
-}
-
-:host([data-jb-theme="dark"]) #sliderCanvas {
-  background: #292524 !important;
-  border-color: rgba(168, 162, 158, 0.42) !important;
-}
-
-:host([data-jb-theme="dark"]) #sliderValues {
-  color: #d6d3d1;
+:host :where(pre, .cm-editor) {
+  background: var(--jbm-code-bg) !important;
+  color: var(--jbm-code-fg) !important;
+  border-color: var(--jbm-code-border) !important;
 }
