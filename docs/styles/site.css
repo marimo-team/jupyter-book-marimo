@@ -1,0 +1,29 @@
+/* Jupyter Book 2.1.5 marks the active sidebar entry with this class. */
+html.dark .myst-toc-item-exact {
+  background-color: rgb(30, 64, 175) !important;
+  color: rgb(219, 234, 254) !important;
+}
+
+html.dark .myst-toc-item-exact :where(a, span) {
+  color: rgb(219, 234, 254) !important;
+}
+
+article pre {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+@media (max-width: 48rem) {
+  article :where(h1, h2, h3, h4, h5, h6) > a[href^="#"] {
+    display: none !important;
+  }
+
+  article pre {
+    white-space: pre-wrap !important;
+  }
+
+  article pre :where(code, span) {
+    overflow-wrap: anywhere !important;
+    white-space: inherit !important;
+  }
+}

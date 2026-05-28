@@ -403,8 +403,14 @@ export const shadowThemeCss = `
 }
 
 :host([data-jb-theme="dark"]) .marimo :is(input, textarea, select) {
-  background: #f8fafc !important;
-  color: #111827 !important;
+  background: var(--jbm-surface, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+  color-scheme: dark !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo :is(input, textarea)::placeholder {
+  color: var(--jbm-muted-foreground, #a8a29e) !important;
 }
 
 :host([data-jb-theme="dark"]) .marimo .contents.light,
@@ -427,11 +433,25 @@ export const shadowThemeCss = `
 :host([data-jb-theme="dark"]) .marimo .contents.light :is(
   input,
   textarea,
-  select,
-  option
+  select
 ) {
-  background: #f8fafc !important;
-  color: #111827 !important;
+  background: var(--jbm-surface, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+  color-scheme: dark !important;
+}
+
+:host([data-jb-theme="dark"]) .marimo .contents.light option {
+  background: var(--jbm-surface, #292524) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+  color-scheme: dark !important;
+}
+
+:host([data-jb-theme="dark"])
+  .marimo
+  .contents.light
+  :is(input, textarea)::placeholder {
+  color: var(--jbm-muted-foreground, #a8a29e) !important;
 }
 
 :host([data-jb-theme="dark"]) .marimo .contents.light input.bg-background,
@@ -439,10 +459,11 @@ export const shadowThemeCss = `
 :host([data-jb-theme="dark"]) .marimo .contents.light input.w-full,
 :host([data-jb-theme="dark"]) .marimo .contents.light input[class*="placeholder"],
 :host([data-jb-theme="dark"]) .marimo .contents.light textarea.bg-background,
-:host([data-jb-theme="dark"]) .marimo .contents.light select.bg-background,
-:host([data-jb-theme="dark"]) .marimo .contents.light option {
-  background: #f8fafc !important;
-  color: #111827 !important;
+:host([data-jb-theme="dark"]) .marimo .contents.light select.bg-background {
+  background: var(--jbm-surface, #292524) !important;
+  border-color: var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
+  color: var(--jbm-foreground, #e7e5e4) !important;
+  color-scheme: dark !important;
 }
 
 :host([data-jb-theme="dark"]) .marimo .contents.light .bg-muted,
@@ -451,5 +472,14 @@ export const shadowThemeCss = `
 :host([data-jb-theme="dark"]) .marimo .contents.light [class*="bg-secondary"] {
   background: var(--jbm-surface, #292524) !important;
   color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+/* The generated external-dependencies page imports Slider2D from the upstream
+   tutorial source, which is not pinned in this repo. Keep this override tied to
+   the rendered canvas contract and rerun that page's browser smoke when the
+   dependency changes. */
+:host([data-jb-theme="dark"]) .marimo canvas[id="sliderCanvas"] {
+  background: var(--jbm-surface, #292524) !important;
+  border: 1px solid var(--jbm-border, rgba(168, 162, 158, 0.36)) !important;
 }
 `;

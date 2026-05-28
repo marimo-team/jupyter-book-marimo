@@ -52,6 +52,7 @@ site:
   title: jupyter-book-marimo
   options:
     folders: true
+    style: styles/site.css
   nav: []
   actions: []
   domains: []

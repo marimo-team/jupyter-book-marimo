@@ -1,6 +1,6 @@
 JBM_STYLESHEETS ?=
 PYTHON_PATHS := src tests scripts
-DENO_FORMAT_PATHS := deno.json widget README.md CONTRIBUTING.md releasing.md .github/pull_request_template.md docs/index.md docs/api docs/myst.yml docs/styles/jupyter-book-marimo.css
+DENO_FORMAT_PATHS := deno.json widget README.md CONTRIBUTING.md releasing.md .github/pull_request_template.md docs/index.md docs/api docs/myst.yml docs/styles/jupyter-book-marimo.css docs/styles/site.css
 WIDGET_ENTRY := widget/container-widget.ts
 WIDGET_BUNDLE := src/jupyter_book_marimo/assets/container-widget.mjs
 
