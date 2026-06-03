@@ -96,6 +96,20 @@ def test_marimo_config_directive_uses_canonical_options() -> None:
     }
 
 
+def test_marimo_config_accepts_native_pyproject_block_option() -> None:
+    config = config_from_directive(
+        {
+            "name": "marimo-config",
+            "options": {"pyproject": ""},
+            "body": 'requires-python = ">=3.12"\ndependencies = ["pandas"]\n',
+        }
+    )
+
+    assert config == {
+        "pyproject": 'requires-python = ">=3.12"\ndependencies = ["pandas"]\n'
+    }
+
+
 def test_marimo_config_rejects_pyproject_with_external_env() -> None:
     with pytest.raises(ValueError, match="external-env and pyproject"):
         config_from_directive(

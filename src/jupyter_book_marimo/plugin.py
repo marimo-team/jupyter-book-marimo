@@ -63,6 +63,11 @@ PLUGIN_SPEC = {
             "name": MARIMO_CONFIG_DIRECTIVE,
             "doc": "Configure marimo execution for the current page.",
             "options": MARIMO_CONFIG_OPTION_SPECS,
+            "body": {
+                "type": "string",
+                "required": False,
+                "doc": "TOML pyproject metadata when the pyproject option is set.",
+            },
         },
     ],
     "transforms": [

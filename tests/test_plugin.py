@@ -51,6 +51,10 @@ def assert_plugin_spec_contract(spec: dict[str, object]) -> None:
     assert set(directives) == {"marimo", "marimo-config"}
     assert_typed_options(directives["marimo"])
     assert_typed_options(directives["marimo-config"])
+    config_body = directives["marimo-config"]["body"]
+    assert isinstance(config_body, dict)
+    assert config_body["type"] == "string"
+    assert config_body["required"] is False
     transforms = spec["transforms"]
     assert isinstance(transforms, list)
     assert len(transforms) == 1
@@ -129,6 +133,25 @@ def test_marimo_config_directive_returns_internal_config_node() -> None:
             "header": "import marimo as mo",
             "molab": False,
             "pyproject": 'dependencies = ["pandas"]',
+        },
+        "position": {"start": {"line": 1}},
+    }
+
+
+def test_marimo_config_directive_accepts_native_pyproject_block_option() -> None:
+    [node] = directive_nodes(
+        "marimo-config",
+        {
+            "options": {"pyproject": ""},
+            "body": 'requires-python = ">=3.12"\ndependencies = ["pandas"]\n',
+            "node": {"position": {"start": {"line": 1}}},
+        },
+    )
+
+    assert node == {
+        "type": "marimoConfig",
+        "options": {
+            "pyproject": 'requires-python = ">=3.12"\ndependencies = ["pandas"]\n',
         },
         "position": {"start": {"line": 1}},
     }

@@ -195,6 +195,16 @@ def _reject_conflicts(options: dict[str, Any]) -> None:
             raise ValueError(f"Conflicting marimo options: {first} and {second}")
 
 
+def _normalize_config_block_options(
+    options: dict[str, Any],
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(options)
+    if "pyproject" in normalized and normalized.get("pyproject") == "":
+        normalized["pyproject"] = str(data.get("body") or "")
+    return normalized
+
+
 def _normalize_cell_options(options: dict[str, Any], language: str) -> CellOptions:
     _reject_unknown_options(options, CANONICAL_OPTION_KEYS, directive="marimo")
     _reject_conflicts(options)
@@ -225,7 +235,7 @@ def cell_from_directive(data: dict[str, Any]) -> Cell:
 
 def config_from_directive(data: dict[str, Any]) -> dict[str, Any]:
     """Return page-level `{marimo-config}` metadata."""
-    options = _directive_options(data)
+    options = _normalize_config_block_options(_directive_options(data), data)
     _reject_unknown_options(options, CONFIG_OPTION_KEYS, directive="marimo-config")
     _reject_conflicts(options)
     if (

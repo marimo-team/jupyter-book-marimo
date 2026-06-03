@@ -71,12 +71,23 @@ class MolabSourceAssembly:
 
 
 class MolabSourcePlan(Protocol):
-    source_range: LineRange | None
-    execute: bool
-    display_code: bool
-    language: str
-    original_code: str
-    executable_source: str
+    @property
+    def source_range(self) -> LineRange | None: ...
+
+    @property
+    def execute(self) -> bool: ...
+
+    @property
+    def display_code(self) -> bool: ...
+
+    @property
+    def language(self) -> str: ...
+
+    @property
+    def original_code(self) -> str: ...
+
+    @property
+    def executable_source(self) -> str: ...
 
 
 @dataclass(frozen=True)
