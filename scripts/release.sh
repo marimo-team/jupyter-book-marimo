@@ -138,7 +138,7 @@ Release summary:
   New version:     $NEW_VERSION
   Commit:          release: $NEW_VERSION
   Tag:             $NEW_VERSION
-  Checks:          make release-check
+  Checks:          make check
 EOF
 
 if ! confirm "Proceed with release"; then
@@ -156,7 +156,7 @@ VERSION_UPDATED=1
 uv lock
 
 print_step "Running release checks"
-make release-check
+make check
 
 print_step "Committing version"
 git add pyproject.toml uv.lock

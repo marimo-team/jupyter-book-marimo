@@ -1,6 +1,7 @@
 # AGENTS.md
 
-This file gives coding agents the repo map and the commands that matter.
+This file gives coding agents the repo map, working boundaries, and commands that
+matter.
 
 ## Build & Test Commands
 
@@ -17,7 +18,7 @@ make test
 # Build the package
 make build
 
-# Regenerate the widget bundle
+# Regenerate only the widget bundle
 make widget-build
 
 # Build docs as static HTML
@@ -25,6 +26,7 @@ make book-build
 
 # Serve docs locally
 make book-start
+
 ```
 
 ## Architecture
@@ -79,8 +81,9 @@ Jupyter Book does not reuse a stale marimo runtime bridge.
 
 ### Authoring parser (`src/jupyter_book_marimo/authoring.py`)
 
-Authoring concerns live in one small parser module. It converts parsed directive
-payloads into execution options shared by the plugin and extractor.
+Authoring concerns live in one small parser module. It validates directive payloads,
+rejects unsupported options, and normalizes execution options shared by the plugin and
+extractor.
 
 Page-level dependencies live in the `{marimo-config}` directive's `pyproject` option.
 `runtime.py` converts that TOML block into `uv run` arguments by reusing marimo's
@@ -133,6 +136,7 @@ jupyter-book-marimo/
 │   ├── runtime.py                # subprocess extraction and uv sandbox execution
 │   └── assets/container-widget.mjs # generated Deno bundle packaged at runtime
 ├── widget/                       # TypeScript source for the anywidget bridge
+├── scripts/bundle_widget.py      # Deno bundle writer for the packaged bridge
 ├── tests/                        # pytest unit tests
 ├── docs/                         # Jupyter Book docs application surface
 ├── Makefile
@@ -144,10 +148,15 @@ jupyter-book-marimo/
 - Keep generated output out of commits: `dist/`, `docs/_build/`, `docs/_site/`, and
   `docs/.jupyter-book-marimo/` are build artifacts.
 - Prefer `make check` before handoff. It runs Python and Deno format checks, lint,
-  type-checks, widget bundle freshness checks, tests, and package build.
-- Use `make widget-build` after changing `widget/`.
+  type-checks, tests, widget bundle generation, package build, and a strict docs build.
+- `make build` runs `make widget-build` before `uv build`.
+- Use `make widget-build` when you only need to refresh
+  `src/jupyter_book_marimo/assets/container-widget.mjs`.
 - Use `make book-build` after changes to docs, MyST parsing, runtime assets, or browser
   hydration behavior.
+- Do not edit `docs/tutorials/` by hand. Those pages are generated from upstream
+  tutorial content. Keep repo-owned docs work in `docs/api/`, `docs/index.md`,
+  `docs/myst.yml`, and `docs/styles/`.
 - If browser behavior changes, verify the built book with `agent-browser` or an
   equivalent real browser run. Static tests are not enough for the widget/theme
   boundary.

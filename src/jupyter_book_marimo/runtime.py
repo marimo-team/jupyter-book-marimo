@@ -27,7 +27,7 @@ from typing import Any, TypeGuard
 
 from .authoring import as_bool, pyproject_to_script_metadata
 
-MARIMO_REQUIREMENT = "marimo>=0.23.5,<0.24"
+MARIMO_REQUIREMENT = "marimo>=0.23.8"
 
 UV_RUN_TIMEOUT_SECONDS = int(
     os.environ.get("JUPYTER_BOOK_MARIMO_UV_TIMEOUT_SECONDS", "300")

@@ -1,18 +1,19 @@
 # Contributing to jupyter-book-marimo
 
-Set up the development environment from the repository root.
+Work from the repository root. `uv` installs the package, the development tools, Jupyter
+Book, and the Deno runtime used by the widget project.
 
 ## Prerequisites
 
-| Tool                             | Purpose                                               |
-| -------------------------------- | ----------------------------------------------------- |
-| [uv](https://docs.astral.sh/uv/) | Manages Python, dependencies, tests, and builds       |
-| Python 3.10+                     | Required by the package                               |
-| Jupyter Book >=2.1.5             | Builds the docs site through the dev dependency group |
+| Tool                             | Purpose                                         |
+| -------------------------------- | ----------------------------------------------- |
+| [uv](https://docs.astral.sh/uv/) | Manages Python, dependencies, tests, and builds |
+| Python 3.10+                     | Required by the package                         |
 
 Install dependencies from the repo root:
 
 ```bash
+uv python install "$(cat .python-version)"
 uv sync --dev
 ```
 
@@ -22,17 +23,17 @@ uv sync --dev
 
 ### Make targets
 
-| Command             | What it does                                                  |
-| ------------------- | ------------------------------------------------------------- |
-| `make format`       | Format Python, widget TypeScript, and docs Markdown           |
-| `make lint`         | Check formatting, lint Python and TypeScript, and type-check  |
-| `make test`         | Run Python and widget tests                                   |
-| `make check`        | Run lint, tests, bundle freshness checks, and package build   |
-| `make build`        | Check the widget bundle and build the package with `uv build` |
-| `make widget-build` | Regenerate the packaged widget bundle after editing `widget/` |
-| `make book-build`   | Build docs as strict static HTML                              |
-| `make book-start`   | Serve docs locally                                            |
-| `make clean`        | Delete build artifacts                                        |
+| Command             | What it does                                                |
+| ------------------- | ----------------------------------------------------------- |
+| `make format`       | Format Python, widget TypeScript, and maintained Markdown   |
+| `make lint`         | Check formatting, lint Python and TypeScript, and typecheck |
+| `make test`         | Run Python and widget tests                                 |
+| `make build`        | Regenerate the widget bundle and build wheel and sdist      |
+| `make book-build`   | Build docs as strict static HTML                            |
+| `make check`        | Run lint, tests, build, and strict docs build               |
+| `make widget-build` | Regenerate only the packaged widget bundle                  |
+| `make book-start`   | Serve docs locally                                          |
+| `make clean`        | Delete build artifacts                                      |
 
 ### Linting and formatting
 
@@ -52,7 +53,7 @@ make test
 uv run pytest tests/test_extract.py::test_reactive_islands_use_browser_cell_indexes
 ```
 
-### Building Docs
+### Building docs
 
 ```bash
 make book-build
@@ -69,13 +70,18 @@ exercise the real Jupyter Book executable plugin path.
 
 `docs/tutorials/` is generated from upstream marimo tutorials. Do not edit those files
 by hand in this repository. Change the upstream source or the export script instead.
+Keep repo-owned documentation changes in `docs/api/`, `docs/index.md`, `docs/myst.yml`,
+and `docs/styles/`.
 
 Keep this repo focused on the marimo + Jupyter Book integration. For general Jupyter
 Book build, hosting, and publishing mechanics, point contributors to the official docs:
 https://jupyterbook.org/stable/build-and-publish/
 
-The widget source of truth is `widget/`. Run `make widget-build` after editing the
-TypeScript source. Do not manually edit either generated copy:
+The widget source of truth is `widget/`. `make build` regenerates the packaged bundle
+before building the Python artifacts. Use `make widget-build` when you only need to
+refresh `src/jupyter_book_marimo/assets/container-widget.mjs`.
+
+Do not manually edit generated widget copies:
 `src/jupyter_book_marimo/assets/container-widget.mjs` or
 `docs/.jupyter-book-marimo/container-widget.mjs`.
 
@@ -85,13 +91,14 @@ TypeScript source. Do not manually edit either generated copy:
 jupyter-book-marimo/
 ├── src/jupyter_book_marimo/
 │   ├── plugin.py                 # MyST executable plugin entrypoint
-│   ├── authoring.py              # frontmatter, fence parsing, execution options
+│   ├── authoring.py              # directive validation and execution options
 │   ├── extract.py                # marimo execution and island export
-│   ├── runtime.py                # sandbox dispatch
-│   └── assets/container-widget.mjs # generated browser ESM bundle
-├── widget/                       # TypeScript source for the bridge
+│   ├── runtime.py                # subprocess extraction and uv sandbox execution
+│   └── assets/container-widget.mjs # generated Deno bundle packaged at runtime
+├── widget/                       # TypeScript source for the anywidget bridge
+├── scripts/bundle_widget.py      # Deno bundle writer for the packaged bridge
 ├── tests/                        # pytest unit tests
-├── docs/                         # Jupyter Book docs site
+├── docs/                         # Jupyter Book docs application surface
 └── Makefile
 ```
 
@@ -112,12 +119,23 @@ make book-start
 Then open `http://localhost:3102`, interact with the index slider, toggle light/dark
 mode, and click through the tutorial pages.
 
+## Releases
+
+Releases are cut from a clean `main` branch with `./scripts/release.sh patch` or
+`./scripts/release.sh minor`. The script bumps `pyproject.toml`, refreshes `uv.lock`,
+runs `make check`, commits the version, and creates a semver tag.
+
+Pushing the tag starts `.github/workflows/publish.yml`. The workflow builds the package,
+uploads `dist/`, publishes with `uv publish`, and creates GitHub release notes. PyPI
+Trusted Publishing is configured for the `pypi` GitHub environment.
+
 ## Submitting a Pull Request
 
 1. Fork the repo and create a branch from `main`.
 2. Make your changes and add tests for new behavior.
 3. Run `make check`.
-4. Run `make book-build` for docs, plugin, or runtime changes.
+4. Run a browser check for docs, plugin, runtime, widget, styling, or navigation
+   changes.
 5. Open a PR. The template lists the expected checks.
 
 Every bug fix should include a regression test when unit tests can cover the behavior.

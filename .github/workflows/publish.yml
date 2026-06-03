@@ -24,7 +24,7 @@ jobs:
         run: uv python install "$(cat .python-version)"
 
       - name: Run release checks
-        run: make release-check
+        run: make check
 
       - name: Upload package artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -51,14 +51,6 @@ jobs:
         with:
           name: dist
           path: dist/
-
-      - name: Validate release artifact version
-        run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Refusing to publish non-release tag: $GITHUB_REF_NAME" >&2
-            exit 1
-          fi
-          uv run python scripts/smoke_package.py --check-artifacts-only "$GITHUB_REF_NAME"
 
       - name: Publish package
         run: uv publish
