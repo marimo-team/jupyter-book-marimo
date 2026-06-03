@@ -12,11 +12,11 @@ intro:
 
 Recommended sequence:
 
-- [intro](intro.html)
-- [dataflow](dataflow.html)
-- [ui](ui.html)
-- [markdown](markdown.html)
-- [plots](plots.html)
-- [layout](layout.html)
-- [fileformat](fileformat.html)
-- [for-jupyter-users](marimo_for_jupyter_users.html)
+- [intro](intro.md)
+- [dataflow](dataflow.md)
+- [ui](ui.md)
+- [markdown](markdown.md)
+- [plots](plots.md)
+- [layout](layout.md)
+- [fileformat](fileformat.md)
+- [for-jupyter-users](for_jupyter_users.md)
