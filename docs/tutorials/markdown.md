@@ -3,26 +3,28 @@ title: Markdown
 ---
 
 ```{marimo-config}
----
-header: |
-  # Copyright 2026 Marimo. All rights reserved
-pyproject: |
-  requires-python = ">=3.11"
+:header: # Copyright 2026 Marimo. All rights reserved
+:pyproject:
+
+  requires-python = ">=3.12"
   dependencies = [
-      "marimo>=0.23.5,<0.24",
-      "matplotlib",
-      "numpy",
-      "polars",
+      "marimo",
+      "matplotlib==3.10.1",
+      "numpy==2.2.4",
+      "polars==1.26.0",
   ]
----
 ```
 
+````{marimo} python
+:hide-code: true
+
+mo.md("""
 # Hello, Markdown!
 
-Use marimo's "`md`" function to write markdown. This function compiles Markdown into
-HTML that marimo can display.
+Use marimo's "`md`" function to write markdown. This function compiles Markdown into HTML that marimo can display.
 
-For example, here's the code that rendered the above title and paragraph:
+For example, here's the code that rendered the above title and
+paragraph:
 
 ```python3
 mo.md(
@@ -35,25 +37,28 @@ mo.md(
     '''
 )
 ```
-
-<!---->
+""")
+````
 
 **Tip: toggling between the Markdown and Python editor**
 
-Although markdown is written with `mo.md`, marimo provides a markdown editor that hides
-this boilerplate from you.
+Although markdown is written with `mo.md`, marimo provides a markdown editor
+that hides this boilerplate from you, for cells that only contain `mo.md(...)`.
 
-Toggle between the Markdown and Python editors by clicking the blue icon in the
-top-right of the editor, entering `Ctrl/Cmd+Shift+M`, or using the "cell actions menu".
-You can also **hide** the markdown editor through the cell actions menu.
+Toggle between the Markdown and Python
+editors by clicking the blue icon in the top-right of the editor,
+entering `Ctrl/Cmd+Shift+M`, or using the "cell actions menu". You can
+also **hide** the markdown editor through the cell actions menu.
 
-**Tip**: To interpolate Python values into markdown strings, you'll need to use
-`mo.md(f"...")` directly; the markdown view does not support f-strings.
+**Tip:** To interpolate Python values into markdown strings, you'll need to use
+a Python f-string; do this by checking the `f` box in the bottom-right corner of the
+markdown editor, or with `mo.md(f"...")` in the Python view.
 
-<!---->
+````{marimo} python
+:hide-code: true
 
+mo.md(r"""
 ## LaTeX
-
 You can embed LaTeX in Markdown.
 
 For example,
@@ -76,17 +81,11 @@ mo.md(
 
 renders the display math
 
-```{marimo} python
-:hide-code: true
-
-mo.md(
-    r'''
-    \[
-    f: \mathbf{R} \to \mathbf{R}
-    \]
-    '''
-)
-```
+\[
+f: \mathbf{R} \to \mathbf{R}.
+\]
+""")
+````
 
 ```{marimo} python
 :hide-code: true
@@ -120,9 +119,9 @@ mo.accordion(
 
 ## Interpolating Python values
 
-You can interpolate Python values into markdown using `f-strings` and marimo's `as_html`
-function. This lets you create markdown whose contents depend on data that changes at
-runtime.
+You can interpolate Python values into markdown using
+`f-strings` and marimo's ` as_html` function. This lets you create
+markdown whose contents depend on data that changes at runtime.
 
 Here are some examples.
 
@@ -131,6 +130,7 @@ def _sine_plot():
     _x = np.linspace(start=0, stop=2 * np.pi)
     plt.plot(_x, np.sin(_x))
     return plt.gca()
+
 
 mo.md(
     f"""
@@ -171,7 +171,7 @@ mo.md(
 ````
 
 ```{marimo} python
-mo.md(f"Your leaves: {'🍃' * leaves.value}")
+mo.md(f"""Your leaves: {"🍃" * leaves.value}""")
 ```
 
 ```{marimo} python
@@ -190,10 +190,12 @@ mo.accordion(
 ```{marimo} python
 import polars as pl
 
+
 def make_dataframe():
     x = np.linspace(0, 2 * np.pi, 10)
     y = np.sin(x)
     return pl.DataFrame({"x": x, "sin(x)": y})
+
 
 mo.md(
     f"""
@@ -203,7 +205,7 @@ mo.md(
     generates rich HTML for many Python types, including:
 
     - lists, dicts, and tuples,
-    - `pandas` dataframes and series,
+    - `pandas` and `polars` dataframes and series,
     - `seaborn` figures,
     - `plotly` figures, and
     - `altair` figures.
@@ -231,8 +233,9 @@ mo.accordion(
 
 ## Putting it all together
 
-Here's a more interesting example that puts together everything we've learned: rendering
-markdown with LaTeX that depends on the values of Python objects.
+Here's a more interesting example that puts together
+everything we've learned: rendering markdown with LaTeX that depends on
+the values of Python objects.
 
 ```{marimo} python
 amplitude = mo.ui.slider(1, 2, step=0.1, label="amplitude: ")
@@ -257,26 +260,26 @@ def plotsin(amplitude, period):
 ```{marimo} python
 mo.md(
     f"""
-    **A sin curve.**
+**A sin curve.**
 
-    - {amplitude}
-    - {period}
-    """
+- {amplitude}
+- {period}
+"""
 )
 ```
 
 ```{marimo} python
 mo.md(
     rf"""
-    You're viewing the graph of
+You're viewing the graph of
 
-    \[
-    f(x) = {amplitude.value}\sin((2\pi/{period.value:0.2f})x),
-    \]
+\[
+f(x) = {amplitude.value}\sin((2\pi/{period.value:0.2f})x),
+\]
 
-    with $x$ ranging from $0$ to $2\pi$.
-    {mo.as_html(plotsin(amplitude.value, period.value))}
-    """
+with $x$ ranging from $0$ to $2\pi$.
+{mo.as_html(plotsin(amplitude.value, period.value))}
+"""
 )
 ```
 

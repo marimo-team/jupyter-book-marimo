@@ -2,27 +2,21 @@
 title: marimo tutorials
 ---
 
-```{marimo-config}
-:header: # Copyright 2026 Marimo. All rights reserved
-```
+Open a tutorial.
 
-These pages are marimo examples rendered inside regular Jupyter Book pages. Use them to
-see how reactive execution, UI elements, plots, layouts, SQL, Markdown, and page-local
-dependencies feel in a published book.
+marimo is a powerful library for making reactive notebooks and apps. To get
+the most out of marimo, get started with a few tutorials, starting with the
+intro:
 
-Start with the intro, then move through the runtime, UI, Markdown, plotting, layout,
-file-format, dependency, and SQL examples.
+        marimo tutorial intro
 
-## Recommended sequence
+Recommended sequence:
 
-- [Intro](intro.md)
-- [Dataflow](dataflow.md)
-- [UI](ui.md)
-- [Markdown](markdown.md)
-- [Plots](plots.md)
-- [Layout](layout.md)
-- [File format](fileformat.md)
-- [External dependencies](external_dependencies.md)
-- [SQL](sql.md)
-- [Markdown file format](markdown_format.md)
-- [marimo for Jupyter users](for_jupyter_users.md)
+- [intro](intro.html)
+- [dataflow](dataflow.html)
+- [ui](ui.html)
+- [markdown](markdown.html)
+- [plots](plots.html)
+- [layout](layout.html)
+- [fileformat](fileformat.html)
+- [for-jupyter-users](marimo_for_jupyter_users.html)

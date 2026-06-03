@@ -6,11 +6,11 @@ title: Layout
 :header: # Copyright 2026 Marimo. All rights reserved
 ```
 
-`marimo` provides functions to help you lay out your output, such as in rows and
-columns, accordions, tabs, and callouts.
+# Layout
 
+`marimo` provides functions to help you lay out your output, such as
+in rows and columns, accordions, tabs, and callouts.
 <!---->
-
 ## Rows and columns
 
 Arrange objects into rows and columns with `mo.hstack` and `mo.vstack`.
@@ -50,8 +50,9 @@ mo.md(
 )
 ```
 
-**Customization.** The presentation of stacked elements can be customized with some
-arguments that are best understood by example.
+**Customization.**
+The presentation of stacked elements can be customized with some arguments
+that are best understood by example.
 
 ```{marimo} python
 justify = mo.ui.dropdown(
@@ -98,6 +99,7 @@ def create_box(num=1):
         f"<div style='min-width: {box_size}px; min-height: {box_size}px; background-color: orange; text-align: center; line-height: {box_size}px'>{str(num)}</div>"
     )
 
+
 boxes = [create_box(i) for i in range(1, 5)]
 ```
 
@@ -112,12 +114,11 @@ mo.accordion(
 )
 ```
 
-**Justifying `Html`.** While you can center or right-justify any object using
-`mo.hstack`, `Html` objects (returned by most marimo functions, and subclassed by most
-marimo classes) have a shortcut using via their `center`, `right`, and `left` methods.
-
+**Justifying `Html`.** While you can center or right-justify any object
+using `mo.hstack`, `Html` objects (returned by most marimo
+functions, and subclassed by most marimo classes) have a shortcut using
+via their `center`, `right`, and `left` methods.
 <!---->
-
 This markdown is left-justified.
 
 ```{marimo} python
@@ -143,9 +144,7 @@ mo.accordion(
 ## Accordion
 
 Create expandable shelves of content using `mo.accordion`:
-
 <!---->
-
 An accordion can contain multiple items:
 
 ```{marimo} python
@@ -224,7 +223,8 @@ mo.accordion({"Documentation: `mo.tree`": mo.doc(mo.tree)})
 
 ## Callout
 
-Turn any markdown or HTML into an emphasized callout with the `callout` method:
+Turn any markdown or HTML into an emphasized callout with the `callout`
+method:
 
 ```{marimo} python
 callout_kind = mo.ui.dropdown(

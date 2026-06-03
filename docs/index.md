@@ -18,12 +18,12 @@ browser hydrates the same output so the slider can update dependent Markdown.
 
 import marimo as mo
 
-demo_count = mo.ui.slider(start=1, stop=10, label="islands")
+demo_count = mo.ui.slider(start=1, stop=10, step=1, label="islands")
 demo_count
 ```
 
 ```{marimo} python
-mo.md(f"Static HTML, live islands: {'🏝️' * demo_count.value}")
+mo.md(f"Static HTML, live islands: {'🏝️' * round(demo_count.value)}")
 ```
 
 ## Build and hydration
@@ -58,12 +58,12 @@ Write marimo cells in a Markdown page:
 
 import marimo as mo
 
-slider = mo.ui.slider(start=1, stop=10, label="islands")
+slider = mo.ui.slider(start=1, stop=10, step=1, label="islands")
 slider
 ```
 
 ```{marimo} python
-"🏝️" * slider.value
+"🏝️" * round(slider.value)
 ```
 ````
 

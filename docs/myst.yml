@@ -41,7 +41,6 @@ project:
         - file: tutorials/plots.md
         - file: tutorials/layout.md
         - file: tutorials/fileformat.md
-        - file: tutorials/external_dependencies.md
         - file: tutorials/sql.md
         - file: tutorials/markdown_format.md
           title: Markdown file format
@@ -52,6 +51,7 @@ site:
   title: jupyter-book-marimo
   options:
     folders: true
+    logo_text: jupyter-book-marimo
     style: styles/site.css
   nav: []
   actions: []

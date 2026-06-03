@@ -1,25 +1,28 @@
 ---
-title: Markdown file format
+title: Markdown
+description: >-
+  Markdown is a lightweight markup language with plain text formatting syntax. `marimo`
+  notebooks can be stored as markdown files, allowing you to work on prose-heavy notebooks
+  in your editor of choice.
 ---
 
 ```{marimo-config}
----
-header: |
-  # Copyright 2026 Marimo. All rights reserved
-pyproject: |
-  requires-python = ">=3.11"
+:pyproject:
+
+  requires-python = ">=3.12"
   dependencies = [
-      "marimo[sql]>=0.23.5,<0.24",
-      "matplotlib",
+      "marimo",
+      "duckdb==1.2.2",
+      "matplotlib==3.10.1",
+      "sqlglot==26.16.2",
   ]
----
 ```
 
 # Markdown file format
 
-By default, marimo notebooks are stored as pure Python files. However, you can also
-store and edit marimo notebooks as `.md` files, letting you work on prose-heavy marimo
-notebooks in your editor of choice.
+By default, marimo notebooks are stored as pure Python files. However,
+you can also store and edit marimo notebooks as `.md` files, letting you
+work on prose-heavy marimo notebooks in your editor of choice.
 
 _Make sure to look at the markdown
 [source code](https://github.com/marimo-team/marimo/blob/main/marimo/_tutorials/markdown_format.md)
@@ -38,24 +41,20 @@ To run it as an app, use
 ```bash
 $ marimo run notebook.md
 ```
-
 <!---->
-
 ## Exporting from Python
 
-You can export marimo notebooks that are stored as Python to the markdown format by
-running the following command:
+You can export marimo notebooks that are stored as Python to the markdown format
+by running the following command:
 
 ```bash
 $ marimo export md notebook.py > notebook.md
 ```
-
 <!---->
-
 ## Creating Python cells
 
-This book uses the `{marimo}` directive with the `python` language for runnable Python
-cells:
+When you do need to create a Python cell in the markdown format, you can use a
+special code block:
 
 ````md
 ```{marimo} python
@@ -73,18 +72,15 @@ plt.plot([1, 2, 3, 4])
 plt.gca()
 ```
 
-Plain language fences remain normal code blocks.
+As long as your code block contains the word `marimo` in a brace, like
+`{marimo}`, or `{marimo} python`, marimo will treat it as a Python cell.
 
 ## `mo` tricks and tips
 
 You can break up markdown into multiple cells by using an empty html tag `<!---->`:
-
 <!---->
-
 View the source of this notebook to see how this cell was created.
-
 <!---->
-
 You can still hide cell code in markdown notebooks:
 
 ````md
@@ -163,15 +159,20 @@ print("This code cell has a syntax error"
 
 ## Limitations of the markdown format
 
-marimo's markdown support treats markdown as just plain old markdown. This means that
-trying to use string interpolation (like this `f"{'🍃' * 7}"`) will just give you the
-raw string. This lets you clearly delineate what values are supposed to be computed, and
-what values are static. To interpolate Python values, just use a Python cell:
+marimo's markdown support treats markdown as just plain old markdown. This
+means that trying to use string interpolation (like this `f"{'🍃' * 7}"`) will
+just give you the raw string. This lets you clearly delineate what values are
+supposed to be computed, and what values are static. To interpolate Python
+values, just use a Python cell:
 
 ```{marimo} python
 mo.md(f"""Like so: {"🍃" * 7}""")
 ```
 
+`````{marimo} python
+:hide-code: true
+
+mo.md(r"""
 ### Limitations on conversion
 
 Whenever you try to implement a cell block like this:
@@ -182,29 +183,28 @@ mo.md("This is a markdown cell")
 ```
 ````
 
-The markdown format will know to automatically keep this as markdown. However, some
-ambiguous cases can't be converted to markdown like this:
+The markdown format will know to automatically keep this as markdown. However,
+some ambiguous cases can't be converted to markdown like this:
+""")
+`````
 
 ````{marimo} python
-mo.md(
-    """
-    This is a markdown cell with an execution block in it
-    ```{marimo} python
-    # Too ambiguous to convert
-    ```
-    """
-)
+mo.md("""
+This is a markdown cell with an execution block in it
+```{marimo} python
+# Too ambiguous to convert
+```
+""")
 ````
 
-It's not likely that you'll run into this issue, but rest assured that marimo is working
-behind the scenes to keep your notebooks unambiguous and clean as possible.
-
+It's not likely that you'll run into this issue, but rest assured that marimo
+is working behind the scenes to keep your notebooks unambiguous and clean as
+possible.
 <!---->
-
 ### Saving multicolumn mode
 
-Multicolumn mode works, but the first cell in a column must be a python cell in order to
-specify column start and to save correctly:
+Multicolumn mode works, but the first cell in a column must be a python cell in
+order to specify column start and to save correctly:
 
 ````md
 ```{marimo} python
@@ -213,14 +213,12 @@ specify column start and to save correctly:
 print("First cell in column 1")
 ```
 ````
-
 <!---->
-
 ### Naming cells
 
-Since the markdown notebook really is just markdown, you can't import from a markdown
-notebook cells like you can in a python notebook; but you can still give your cells a
-name:
+Since the markdown notebook really is just markdown, you can't import from a
+markdown notebook cells like you can in a python notebook; but you can still
+give your cells a name:
 
 ````md
 ```{marimo} python
@@ -238,8 +236,7 @@ name:
 
 ### SQL in markdown
 
-You can also run SQL queries in markdown cells through marimo, using a `sql` code block.
-For instance:
+You can also run SQL queries in markdown cells through marimo, using a `sql` code block. For instance:
 
 ````md
 ```{marimo} sql
@@ -255,10 +252,8 @@ The resultant distribution may be surprising! 🎲[^surprise]
 SELECT GREATEST(a, b), SQRT(c) from uniformly_random_numbers
 ```
 
-In this SQL format, Python variable interpolation in SQL queries occurs automatically.
-Additionally, query results can be assigned to a dataframe with the `query` option. For
-instance, here's how to create a random uniform distribution and assign it to the
-dataframe `uniformly_random_numbers` used above:
+In this SQL format, Python variable interpolation in SQL queries occurs automatically. Additionally, query results can be assigned to a dataframe with the `query` attribute.
+For instance, here's how to create a random uniform distribution and assign it to the dataframe `uniformly_random_numbers` used above:
 
 ````md
 ```{marimo} sql
@@ -297,20 +292,18 @@ FROM range(1, {sample_count.value + 1}) i;
 
 ## Converting back to the Python file format
 
-The markdown format is supposed to lower the barrier for writing text heavy documents,
-it's not meant to be a full replacement for the Python notebook format. You can always
-convert back to a Python notebook if you need to:
+The markdown format is supposed to lower the barrier for writing text heavy
+documents, it's not meant to be a full replacement for the Python notebook
+format. You can always convert back to a Python notebook if you need to:
 
 ```bash
 $ marimo convert my_marimo.md > my_marimo.py
 ```
-
 <!---->
-
 ## More on markdown
 
-Be sure to checkout the markdown.py tutorial (`marimo tutorial markdown`) for more
-information on to type-set and render markdown in marimo.
+Be sure to checkout the markdown.py tutorial (`marimo tutorial markdown`) for
+more information on to type-set and render markdown in marimo.
 
 ```{marimo} python
 :hide-code: true

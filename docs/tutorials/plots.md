@@ -3,17 +3,15 @@ title: Plots
 ---
 
 ```{marimo-config}
----
-header: |
-  # Copyright 2026 Marimo. All rights reserved
-pyproject: |
-  requires-python = ">=3.11"
+:header: # Copyright 2026 Marimo. All rights reserved
+:pyproject:
+
+  requires-python = ">=3.12"
   dependencies = [
-      "marimo>=0.23.5,<0.24",
-      "matplotlib",
-      "numpy",
+      "marimo",
+      "matplotlib==3.10.1",
+      "numpy==2.2.4",
   ]
----
 ```
 
 # Plotting
@@ -24,19 +22,16 @@ pyproject: |
 check_dependencies()
 ```
 
-marimo supports several popular plotting libraries, including matplotlib, plotly,
-seaborn, and altair.
+marimo supports several popular plotting libraries, including matplotlib,
+plotly, seaborn, and altair.
 
-This tutorial gives examples using matplotlib; other libraries are used similarly.
-
+This tutorial gives examples using matplotlib; other libraries are
+used similarly.
 <!---->
-
 ## Matplotlib
-
 <!---->
-
-To show a plot, include it in the last expression of a cell (just like any other
-output).
+To show a plot, include it in the last expression of a cell (just
+like any other output).
 
 ```python3
 # create the plot in the last line of the cell
@@ -69,8 +64,8 @@ plt.gca()
 mo.accordion(plt_show_explainer)
 ```
 
-**A new figure every cell.** Every cell starts with an empty figure for the imperative
-`pyplot` API.
+**A new figure every cell.** Every cell starts with an empty figure for
+the imperative `pyplot` API.
 
 ```{marimo} python
 x = np.linspace(start=-4, stop=4, num=100, dtype=float)
@@ -86,8 +81,8 @@ plt.gca()
 plt.plot(x, x**3)
 ```
 
-To build a figure over multiple cells, use the object-oriented API and create your own
-axis:
+To build a figure over multiple cells, use the object-oriented API and
+create your own axis:
 
 ```{marimo} python
 _, axis = plt.subplots()
@@ -140,19 +135,18 @@ mo.md(
 ```
 
 ## Other libraries
-
 <!---->
-
 marimo also supports these other plotting libraries:
 
 - Plotly
 - Seaborn
 - Altair
 
-Just output their figure objects as the last expression of a cell, or embed them in
-markdown with `mo.as_html`.
+Just output their figure objects as the last expression of a cell,
+or embed them in markdown with `mo.as_html`.
 
-If you would like another library to be integrated into marimo, please get in touch.
+If you would like another library to be integrated into marimo, please
+get in touch.
 
 ````{marimo} python
 :hide-code: true

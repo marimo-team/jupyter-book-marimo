@@ -8,12 +8,10 @@ title: UI
 
 # UI Elements
 
-One of marimo's most powerful features is its first-class support for interactive user
-interface (UI) elements: interacting with a UI element will automatically run cells that
-reference it.
-
+One of marimo's most powerful features is its first-class
+support for interactive user interface (UI) elements: interacting
+with a UI element will automatically run cells that reference it.
 <!---->
-
 ## marimo.ui
 
 ```{marimo} python
@@ -35,12 +33,13 @@ mo.md(f"and here's its value: **{slider.value}**.")
 
 ### How interactions run cells
 
-Whenever you interact with a UI element, its value is sent back to Python. When this
-happens, all cells that reference the global variable bound to the UI element, but don't
-define it, will run.
+Whenever you interact with a UI element, its value is sent back to
+Python. When this happens, all cells that reference the global variable
+bound to the UI element, but don't define it, will run.
 
-This simple rule lets you use UI elements to drive the execution of your program,
-letting you build interactive notebooks and tools for yourselves and others.
+This simple rule lets you use UI elements to
+drive the execution of your program, letting you build
+interactive notebooks and tools for yourselves and others.
 
 ```{marimo} python
 :hide-code: true
@@ -72,12 +71,8 @@ mo.accordion(
 ```
 
 ### Simple elements
-
 <!---->
-
-marimo has a
-[large library of simple UI elements](https://docs.marimo.io/api/inputs/index.html).
-Here are a just few examples:
+marimo has a [large library of simple UI elements](https://docs.marimo.io/api/inputs/index.html). Here are a just few examples:
 
 ```{marimo} python
 :hide-code: true
@@ -172,19 +167,16 @@ documentation(basic_ui_elements.value)
 
 ### Composite elements
 
-    Composite elements are advanced elements
+    Composite elements are advanced elements that
     let you build UI elements out of other UI elements.
 
     Use these powerful elements to logically group together related elements,
     create a dynamic set of UI elements, or reduce the number of global
     variables in your program.
-
 <!---->
-
-This first example shows how to create an array of UI elements using `mo.ui.array`. When
-you interact with an element in the array, all cells that reference the array are
-reactively run. If you instead used a regular Python list, cells referring to the list
-would _not_ be run.
+This first example shows how to create an array of UI elements using `mo.ui.array`.
+When you interact with an element in the array, all cells that reference the
+array are reactively run. If you instead used a regular Python list, cells referring to the list would _not_ be run.
 
 ```{marimo} python
 array = mo.ui.array(
@@ -237,16 +229,15 @@ documentation(composite_elements.value)
 
 ### Building custom elements
 
-marimo supports third-party UI elements through anywidget — this lets you build your own
-interactive UI elements, or use widgets built by others in the community. To learn more,
-[see our docs](https://docs.marimo.io/guides/integrating_with_marimo/custom_ui_plugins.html).
-
+marimo supports third-party UI elements through anywidget — this lets you build
+your own interactive UI elements, or use widgets built by others in the
+community. To learn more, [see our
+docs](https://docs.marimo.io/guides/integrating_with_marimo/custom_ui_plugins.html).
 <!---->
-
 ## Appendix
-
-The remaining cells are helper data structures and functions. You can look at their code
-if you're curious how certain parts of this tutorial were implemented.
+The remaining cells are helper data structures and functions.
+You can look at their code if you're curious how certain parts of this
+tutorial were implemented.
 
 ```{marimo} python
 composite_elements = mo.ui.dropdown(

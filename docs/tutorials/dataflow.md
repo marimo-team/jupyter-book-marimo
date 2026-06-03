@@ -3,61 +3,55 @@ title: Dataflow
 ---
 
 ```{marimo-config}
----
-header: |
-  # Copyright 2026 Marimo. All rights reserved
-pyproject: |
-  requires-python = ">=3.11"
+:header: # Copyright 2026 Marimo. All rights reserved
+:pyproject:
+
+  requires-python = ">=3.12"
   dependencies = [
-      "marimo>=0.23.5,<0.24",
-      "matplotlib",
-      "numpy",
+      "marimo",
+      "matplotlib==3.10.1",
+      "numpy==2.2.4",
   ]
----
 ```
 
 # How marimo notebooks run
 
-Reactive execution is based on a single rule: when a cell is run, all other cells that
-reference any of the global variables it defines run automatically.
+Reactive execution is based on a single rule: when a cell is run, all other
+cells that reference any of the global variables it defines run
+automatically.
 
-To provide reactive execution, marimo creates a dataflow graph out of your cells.
-
+To provide reactive execution, marimo creates a dataflow graph out of your
+cells.
 <!---->
-
 **Tip: disabling automatic execution.**
 
-marimo lets you disable automatic execution: just go into the notebook settings and set
+marimo lets you disable automatic execution: in the notebook
+footer, change "On Cell Change" to "lazy".
 
-"Runtime > On Cell Change" to "lazy".
-
-When the runtime is lazy, after running a cell, marimo marks its descendants as stale
-instead of automatically running them. The lazy runtime puts you in control over when
-cells are run, while still giving guarantees about the notebook state.
-
+When the runtime is lazy, after running a cell, marimo marks its
+descendants as stale instead of automatically running them. The lazy
+runtime puts you in control over when cells are run, while still giving
+guarantees about the notebook state.
 <!---->
-
 ## References and definitions
 
-A marimo notebook is a directed acyclic graph in which nodes represent cells and edges
-represent data dependencies. marimo creates this graph by analyzing each cell (without
-running it) to determine its
+A marimo notebook is a directed acyclic graph in which nodes represent
+cells and edges represent data dependencies. marimo creates this graph by
+analyzing each cell (without running it) to determine its
 
 - references ("refs*), the global variables it reads but doesn't define;
 - definitions ("defs"), the global variables it defines.
 
-There is an edge from one cell to another if the latter cell references any global
-variables defined by the former cell.
+There is an edge from one cell to another if the latter cell references any
+global variables defined by the former cell.
 
-The rule for reactive execution can be restated in terms of the graph: when a cell is
-run, its descendants are run automatically.
-
+The rule for reactive execution can be restated in terms of the graph: when
+a cell is run, its descendants are run automatically.
 <!---->
-
 ### Example
 
-The next four cells plot a sine wave with a given period and amplitude. Each cell is
-labeled with its refs and defs.
+The next four cells plot a sine wave with a given period and amplitude.
+Each cell is labeled with its refs and defs.
 
 ```{marimo} python
 :hide-code: true
@@ -77,6 +71,8 @@ mo.accordion(
 ```
 
 ```{marimo} python
+:editor: true
+
 mo.md(
     f"""
     {mo.as_html(plot_wave(amplitude, period))}
@@ -88,6 +84,8 @@ mo.md(
 ```
 
 ```{marimo} python
+:editor: true
+
 period = 2 * 3.14159
 
 mo.md(
@@ -99,6 +97,8 @@ mo.md(
 ```
 
 ```{marimo} python
+:editor: true
+
 amplitude = 1
 
 mo.md(
@@ -110,6 +110,8 @@ mo.md(
 ```
 
 ```{marimo} python
+:editor: true
+
 def plot_wave(amplitude, period):
     x = np.linspace(0, 2 * np.pi, 256)
     plt.plot(x, amplitude * np.sin(2 * np.pi / period * x))
@@ -131,117 +133,130 @@ mo.md(
 )
 ```
 
-🌊 **Try it!** In the above cells, try changing the value `period` or `amplitude`, then
-click the run button ( ▷ ) to register your changes. See what happens to the sine wave.
-
+🌊 **Try it!** In the above cells, try changing the value `period` or
+`amplitude`, then click the run button ( ▷ ) to register your changes.
+See what happens to the sine wave.
 <!---->
-
-Here is the dataflow graph for the cells that make the sine wave plot, plus the cells
-that import libraries. Each cell is labeled with its defs.
+Here is the dataflow graph for the cells that make the sine wave plot, plus
+the cells that import libraries. Each cell is labeled with its defs.
 
 ```
-                 +------+               +-----------+
-     +-----------| {mo} |-----------+   | {np, plt} |
-     |           +---+--+           |   +----+------+
-     |               |              |        |
-     |               |              |        |
-     v               v              v        v
-+----------+   +-------------+   +--+----------+
-| {period} |   | {amplitude} |   | {plot_wave} |
-+---+------+   +-----+-------+   +------+------+
-    |                |                  |
-    |                v                  |
-    |              +----+               |
-    +------------> | {} | <-------------+
-                   +----+
+                   +------+               +-----------+
+       +-----------| {mo} |-----------+   | {np, plt} |
+       |           +---+--+           |   +----+------+
+       |               |              |        |
+       |               |              |        |
+       v               v              v        v
+  +----------+   +-------------+   +--+----------+
+  | {period} |   | {amplitude} |   | {plot_wave} |
+  +---+------+   +-----+-------+   +------+------+
+      |                |                  |
+      |                v                  |
+      |              +----+               |
+      +------------> | {} | <-------------+
+                     +----+
 ```
 
 The last cell, which doesn't define anything, produces the plot.
-
 <!---->
-
 ## Dataflow programming
 
-marimo's runtime rule has some important consequences that may seem surprising if you
-are not used to dataflow programming. We list these below.
-
+marimo's runtime rule has some important consequences that may seem
+surprising if you are not used to dataflow programming. We list these
+below.
 <!---->
-
 ### Execution order is not cell order
 
-The order in which cells are executed is determined entirely by the dataflow graph. This
-makes marimo notebooks more reproducible than traditional notebooks. It also lets you
-place boilerplate, like imports or long markdown strings, at the bottom of the editor.
-
+The order in which cells are executed is determined entirely by the
+dataflow graph. This makes marimo notebooks more reproducible than
+traditional notebooks. It also lets you place boilerplate, like
+imports or long markdown strings, at the bottom of the editor.
 <!---->
-
 ### Global variable names must be unique
 
-Every global variable can be defined by only one cell. Without this constraint, there
-would be no way for marimo to know which order to execute cells in.
+Every global variable can be defined by only one cell. Without this
+constraint, there would be no way for marimo to know which order to
+execute cells in.
 
-If you violate this constraint, marimo provides a helpful error message, like below:
+If you violate this constraint, marimo provides a helpful
+error message, like below:
 
 ```{marimo} python
+:editor: true
+
 planet = "Mars"
 planet
 ```
 
 ```{marimo} python
+:editor: true
+
 planet = "Earth"
 planet
 ```
 
-**🌊 Try it!** In the previous cell, change the name `planet` to `home`, then run the
-cell.
-
+**🌊 Try it!** In the previous cell, change the name `planet` to `home`,
+then run the cell.
 <!---->
+Because defs must be unique, global variables cannot be modified with
+operators like `+=` or `-=` in cells other than the one that created
+them; these operators count as redefinitions of a name.
 
-Because defs must be unique, global variables cannot be modified with operators like
-`+=` or `-=` in cells other than the one that created them; these operators count as
-redefinitions of a name.
-
-**🌊 Try it!** Get rid of the following errors by merging the next two cells into a
-single cell.
+**🌊 Try it!** Get rid of the following errors by merging the next two
+cells into a single cell.
 
 ```{marimo} python
+:editor: true
+
 count = 0
 ```
 
 ```{marimo} python
+:editor: true
+
 count += 1
 ```
 
 ### Underscore-prefixed variables are local to cells
 
-Global variables prefixed with an underscore are "private" to the cells that define
-them. This means that multiple cells can define the same underscore-prefixed name, and
-one cell's private variables won't be made available to other cells.
+Global variables prefixed with an underscore are "private" to the cells
+that define them. This means that multiple cells can define the same
+underscore-prefixed name, and one cell's private variables won't be
+made available to other cells.
 
 **Example**.
 
 ```{marimo} python
+:editor: true
+
 _private_variable, _ = 1, 2
 _private_variable, _
 ```
 
 ```{marimo} python
+:editor: true
+
 _private_variable, _ = 3, 4
 _private_variable, _
 ```
 
 ```{marimo} python
+:editor: true
+
 # `_private_variable` and `_` are not defined in this cell
 _private_variable, _
 ```
 
 ### Deleting a cell deletes its variables
 
-Deleting a cell deletes its global variables and then runs all cells that reference
-them. This prevents severe bugs that can arise when state has been deleted from the
-editor but not from the program memory.
+Deleting a cell deletes its global variables and
+then runs all cells that reference them. This prevents severe bugs that
+can arise when state has been deleted from the editor but not from the
+program memory.
 
 ```{marimo} python
+:editor: true
+
 to_be_deleted = "variable still exists"
 
 mo.md(
@@ -254,6 +269,8 @@ mo.md(
 ```
 
 ```{marimo} python
+:editor: true
+
 to_be_deleted
 ```
 
@@ -262,30 +279,40 @@ to_be_deleted
 Cycles among cells are not allowed. For example:
 
 ```{marimo} python
+:editor: true
+
 one = two - 1
 ```
 
 ```{marimo} python
+:editor: true
+
 two = one + 1
 ```
 
 ### marimo doesn't track attributes
 
-marimo only tracks global variables. Writing object attributes does not trigger reactive
-execution.
+marimo only tracks global variables. Writing object attributes does not
+trigger reactive execution.
 
-**🌊 Example**. Change the value of `state.number` in the next cell, then run the cell.
-Notice how the subsequent cell isn't updated.
+**🌊 Example**. Change the value of `state.number` in the next cell, then
+run the cell. Notice how the subsequent cell isn't updated.
 
 ```{marimo} python
+:editor: true
+
 state.number = 1
 ```
 
 ```{marimo} python
+:editor: true
+
 state.number
 ```
 
 ```{marimo} python
+:editor: true
+
 class namespace:
     pass
 
@@ -309,8 +336,9 @@ mo.accordion(
 
 ### marimo doesn't track mutations
 
-In Python, it's impossible to know whether code will mutate an object without running
-it. So: mutations (such as appending to a list) will not trigger reactive execution.
+In Python, it's impossible to know whether code will
+mutate an object without running it. So: mutations (such as
+appending to a list) will not trigger reactive execution.
 
 ```{marimo} python
 :hide-code: true
@@ -330,12 +358,13 @@ mo.accordion(
 
 ## Best practices
 
-The constraints marimo puts on your notebooks are all natural consequences of the fact
-that marimo programs are directed acyclic graphs. As long as you keep this fact in mind,
-you'll quickly adapt to the marimo way of writing notebooks.
+The constraints marimo puts on your notebooks are all natural consequences
+of the fact that marimo programs are directed acyclic graphs. As long as
+you keep this fact in mind, you'll quickly adapt to the marimo way of
+writing notebooks.
 
-Ultimately, these constraints will enable you to create powerful notebooks and apps, and
-they'll encourage you to write clean, reproducible code.
+Ultimately, these constraints will enable you to create powerful notebooks
+and apps, and they'll encourage you to write clean, reproducible code.
 
 Follow these tips to stay on the marimo way:
 
