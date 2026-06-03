@@ -105,9 +105,9 @@ const ensureMolabActionStyle = (doc: Document): void => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  margin: 0 0.25rem 0 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0 0.375rem 0 0;
   color: inherit;
   line-height: 1;
   vertical-align: middle;
@@ -115,8 +115,8 @@ const ensureMolabActionStyle = (doc: Document): void => {
 
 .myst-fm-molab-icon {
   display: block;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.125rem;
+  height: 1.125rem;
   margin: 0;
   color: currentColor;
   opacity: 0.6;

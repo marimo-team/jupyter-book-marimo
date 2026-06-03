@@ -926,6 +926,47 @@ var globalThemeCss = `
   overflow-x: auto;
 }
 
+.${outputClass}
+  :where(
+    marimo-accordion,
+    marimo-array,
+    marimo-button,
+    marimo-checkbox,
+    marimo-code-editor,
+    marimo-date,
+    marimo-dict,
+    marimo-dropdown,
+    marimo-file,
+    marimo-number,
+    marimo-radio,
+    marimo-range-slider,
+    marimo-slider,
+    marimo-switch,
+    marimo-table,
+    marimo-tabs,
+    marimo-text,
+    marimo-text-area
+  ) {
+  display: inline-block;
+  line-height: normal;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.${outputClass}
+  :where(
+    marimo-accordion,
+    marimo-array,
+    marimo-code-editor,
+    marimo-dict,
+    marimo-file,
+    marimo-table,
+    marimo-tabs,
+    marimo-text-area
+  ) {
+  display: block;
+}
+
 .${outputClass} :where(p, li) code,
 .${outputClass} :where(p, li) code * {
   white-space: normal !important;
@@ -1042,6 +1083,99 @@ var shadowThemeCss = `
   color-scheme: light;
 }
 
+/* marimo's UI utilities are layered. Some notebook widget stylesheets inject
+   unlayered Tailwind resets into component shadow roots, so keep the UI control
+   contract explicit at this bridge boundary. */
+:host :where(.marimo .h-3) {
+  height: calc(var(--spacing, 0.25rem) * 3) !important;
+}
+
+:host :where(.marimo .w-3) {
+  width: calc(var(--spacing, 0.25rem) * 3) !important;
+}
+
+:host :where(.marimo .h-4) {
+  height: calc(var(--spacing, 0.25rem) * 4) !important;
+  min-height: calc(var(--spacing, 0.25rem) * 4) !important;
+}
+
+:host :where(.marimo .w-4) {
+  width: calc(var(--spacing, 0.25rem) * 4) !important;
+}
+
+:host :where(.marimo .h-6) {
+  height: calc(var(--spacing, 0.25rem) * 6) !important;
+  min-height: calc(var(--spacing, 0.25rem) * 6) !important;
+}
+
+:host :where(.marimo .h-px) {
+  height: 1px !important;
+}
+
+:host :where(.marimo .px-0\\.5) {
+  padding-inline: calc(var(--spacing, 0.25rem) * 0.5) !important;
+}
+
+:host :where(.marimo .px-1\\.5) {
+  padding-inline: calc(var(--spacing, 0.25rem) * 1.5) !important;
+}
+
+:host :where(.marimo .px-2) {
+  padding-inline: calc(var(--spacing, 0.25rem) * 2) !important;
+}
+
+:host :where(.marimo .py-1) {
+  padding-block: calc(var(--spacing, 0.25rem) * 1) !important;
+}
+
+:host :where(.marimo .border-input) {
+  border-color: var(--input, ButtonBorder) !important;
+}
+
+:host :where(.marimo .border-primary) {
+  border-color: var(--primary, Highlight) !important;
+}
+
+:host :where(.marimo .border-s-2) {
+  border-inline-start-color: var(--border, ButtonBorder) !important;
+  border-inline-start-style: solid !important;
+  border-inline-start-width: 2px !important;
+}
+
+:host :where(.marimo .bg-background) {
+  background-color: var(--background, Field) !important;
+}
+
+:host :where(.marimo .bg-border) {
+  background-color: var(--border, ButtonBorder) !important;
+}
+
+:host :where(.marimo .text-muted-foreground) {
+  color: var(--muted-foreground, GrayText) !important;
+}
+
+:host :where(.marimo .placeholder\\:text-muted-foreground)::placeholder {
+  color: var(--muted-foreground, GrayText) !important;
+}
+
+:host :where(.marimo .shadow-xs-solid) {
+  box-shadow:
+    1px 1px 0 0 var(--base-shadow-darker, rgba(128, 128, 128, 0.4)),
+    0 0 2px 0 rgba(128, 128, 128, 0.2) !important;
+}
+
+:host :where(.marimo [data-testid="marimo-plugin-number-input"] input) {
+  min-height: calc(var(--spacing, 0.25rem) * 6) !important;
+}
+
+:host :where(.marimo [data-testid="marimo-plugin-number-input"] button) {
+  align-items: center !important;
+  display: flex !important;
+  height: auto !important;
+  justify-content: center !important;
+  min-height: 0 !important;
+}
+
 :host([data-jb-theme="dark"]) :where(.marimo) {
   background: transparent !important;
   color: var(--jbm-foreground, #e7e5e4) !important;
@@ -1094,10 +1228,6 @@ var shadowThemeCss = `
 :host([data-jb-theme="dark"])
   :where([style*="background-color: orange"], [style*="background: orange"]) {
   color: #111827 !important;
-}
-
-:host :where(input, button, select, textarea, [role="button"], [role="combobox"]) {
-  min-height: 1.75rem;
 }
 
 :host :where(table) {
@@ -1744,9 +1874,9 @@ var ensureMolabActionStyle = (doc) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  margin: 0 0.25rem 0 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0 0.375rem 0 0;
   color: inherit;
   line-height: 1;
   vertical-align: middle;
@@ -1754,8 +1884,8 @@ var ensureMolabActionStyle = (doc) => {
 
 .myst-fm-molab-icon {
   display: block;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.125rem;
+  height: 1.125rem;
   margin: 0;
   color: currentColor;
   opacity: 0.6;
