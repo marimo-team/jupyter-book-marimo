@@ -807,13 +807,19 @@ var outputClass = "marimo-jupyter-book-output";
 var themeStyleId = "marimo-jupyter-book-theme";
 var shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
 var customStyleAttribute = "data-jupyter-book-marimo-custom-style";
+var scratchpadTipAttribute = "data-jupyter-book-marimo-scratchpad-tip";
+var codeEditorThemeAttribute = "data-jupyter-book-marimo-code-editor-theme";
+var editorRunControlAttribute = "data-jupyter-book-marimo-editor-run-control";
 var globalThemeCss = `
 .${outputClass} {
+  box-sizing: border-box;
   color: inherit;
   color-scheme: inherit;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+  --jbm-error-editor-gap: 0.5rem;
+  --jbm-output-margin-block: 1rem;
   --jbm-background: var(--myst-color-background, var(--pst-color-background, Canvas));
   --jbm-foreground: var(--myst-color-text, var(--pst-color-text-base, CanvasText));
   --jbm-surface: var(--myst-color-surface, var(--pst-color-surface, Field));
@@ -832,6 +838,10 @@ var globalThemeCss = `
   --jbm-inline-code-fg: var(--jbm-foreground);
   --jbm-hover-bg: color-mix(in srgb, var(--jbm-foreground) 8%, transparent);
   --jbm-selection-bg: color-mix(in srgb, var(--jbm-accent) 28%, transparent);
+  --jbm-error-bg: transparent;
+  --jbm-error-border: #e5e7eb;
+  --jbm-error-title: #ea5d5d;
+  --jbm-error-text: #64748b;
 }
 
 .${outputClass}[data-jb-theme="dark"] {
@@ -845,10 +855,22 @@ var globalThemeCss = `
   --jbm-muted-foreground: var(--myst-color-text-muted, var(--pst-color-text-muted, #a8a29e));
   --jbm-code-bg: var(--myst-color-code-background, var(--pst-color-on-background, #292524));
   --jbm-code-fg: var(--jbm-foreground);
+  --jbm-error-bg: color-mix(in srgb, #f87171 6%, var(--jbm-background));
+  --jbm-error-border: color-mix(in srgb, #f87171 42%, var(--jbm-border));
+  --jbm-error-title: #fca5a5;
+  --jbm-error-text: #d6d3d1;
 }
 
 .${outputClass}[data-jb-theme="light"] {
   color-scheme: light;
+}
+
+.${outputClass}:where(
+  :has(> marimo-island:not([hidden]):not([data-jupyter-book-marimo-hide-output="true"]) > :not(span:empty)),
+  :has(marimo-cell-output > :not(span:empty)),
+  :has(marimo-ui-element)
+) {
+  margin-block: var(--jbm-output-margin-block, 1rem);
 }
 
 .${outputClass}[data-jb-theme="dark"]
@@ -924,6 +946,113 @@ var globalThemeCss = `
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+}
+
+/*
+ * Jupyter Book supplies the page surface. Keep marimo island variables and
+ * runtime ownership, but let each component draw its own visible box.
+ */
+.${outputClass} > marimo-island.marimo {
+  display: contents;
+}
+
+.${outputClass} :where([${scratchpadTipAttribute}="true"]) {
+  display: none !important;
+}
+
+.${outputClass} :where(marimo-ui-element:has(> marimo-code-editor)) {
+  display: block !important;
+  max-width: 100%;
+  position: relative !important;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]) {
+  align-items: center;
+  background: var(--jbm-surface, Field);
+  border: 1px solid var(--jbm-border, ButtonBorder);
+  border-radius: 0.375rem;
+  color: var(--jbm-foreground, ButtonText);
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.5rem;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 0.35rem;
+  top: 0.35rem;
+  width: 1.5rem;
+  z-index: 20;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"])::before {
+  border-block: 0.28rem solid transparent;
+  border-inline-start: 0.45rem solid currentColor;
+  content: "";
+  display: block;
+  margin-inline-start: 0.08rem;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]:hover) {
+  background: var(--jbm-hover-bg, ButtonFace);
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]:focus-visible) {
+  outline: 2px solid var(--jbm-focus-ring, Highlight);
+  outline-offset: 2px;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]:disabled) {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+/*
+ * Exported editor errors do not include the full notebook cell output-area
+ * wrapper. Restore the padding at the alert boundary so intentional error
+ * examples keep the same readable inset in static books.
+ */
+.${outputClass}
+  :where(
+    marimo-island.marimo > [role="alert"],
+    marimo-island.marimo > :has(> [role="alert"]) > [role="alert"],
+    marimo-island.marimo [role="alert"]
+  ) {
+  background: var(--jbm-error-bg, Canvas) !important;
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+  box-sizing: border-box;
+  color: var(--jbm-error-text, CanvasText) !important;
+  padding: 1rem !important;
+}
+
+.${outputClass}
+  :where(marimo-island.marimo [role="alert"])
+  :where(h1, h2, h3, h4, h5, h6, .text-destructive) {
+  color: var(--jbm-error-title, #dc2626) !important;
+}
+
+.${outputClass}
+  :where(marimo-island.marimo [role="alert"])
+  :where([data-orientation="vertical"]) {
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+}
+
+.${outputClass}
+  :where(marimo-island.marimo [role="alert"])
+  :where(a) {
+  color: var(--jbm-link, LinkText) !important;
+}
+
+/*
+ * marimo renders visible source editors as siblings of the server output. Keep
+ * an intentional gap when an error display is followed by that source editor.
+ */
+.${outputClass}
+  :where(
+    marimo-island.marimo > [role="alert"] + marimo-ui-element > marimo-code-editor,
+    marimo-island.marimo > :has(> [role="alert"]) + marimo-ui-element > marimo-code-editor
+  ) {
+  margin-block-start: var(--jbm-error-editor-gap, 0.5rem);
 }
 
 .${outputClass}
@@ -1077,10 +1206,52 @@ var shadowThemeCss = `
   --cm-background: var(--jbm-code-bg, #292524);
   --cm-foreground: var(--jbm-code-fg, #e7e5e4);
   --cm-comment: var(--jbm-muted-foreground, #a8a29e);
+  --jbm-error-bg: color-mix(in srgb, #f87171 6%, var(--jbm-background, #1c1917));
+  --jbm-error-border: color-mix(in srgb, #f87171 42%, var(--jbm-border, rgba(168, 162, 158, 0.36)));
+  --jbm-error-title: #fca5a5;
+  --jbm-error-text: #d6d3d1;
 }
 
 :host([data-jb-theme="light"]) {
   color-scheme: light;
+}
+
+:host :where([${scratchpadTipAttribute}="true"]) {
+  display: none !important;
+}
+
+:host
+  :where(
+    .marimo > [role="alert"],
+    .marimo > :has(> [role="alert"]) > [role="alert"],
+    .marimo [role="alert"],
+    [role="alert"]
+  ) {
+  background: var(--jbm-error-bg, Canvas) !important;
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+  box-sizing: border-box;
+  color: var(--jbm-error-text, CanvasText) !important;
+  padding: 1rem !important;
+}
+
+:host
+  :where(.marimo [role="alert"], [role="alert"])
+  :where(h1, h2, h3, h4, h5, h6, .text-destructive) {
+  color: var(--jbm-error-title, #dc2626) !important;
+}
+
+:host
+  :where(.marimo [role="alert"], [role="alert"])
+  :where([data-orientation="vertical"]) {
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+}
+
+:host :where(.marimo [role="alert"], [role="alert"]) :where(a) {
+  color: var(--jbm-link, LinkText) !important;
+}
+
+:host(:not([data-min-height])) :where(.cm-editor) {
+  min-height: 0 !important;
 }
 
 /* marimo's UI utilities are layered. Some notebook widget stylesheets inject
@@ -1186,7 +1357,7 @@ var shadowThemeCss = `
     .admonition,
     [class*="admonition"],
     .callout,
-    .marimo *,
+    .marimo *:not(.cm-editor):not(.cm-editor *),
     .markdown.prose,
     .markdown.prose *,
     .codehilite,
@@ -1340,7 +1511,10 @@ var shadowThemeCss = `
 }
 
 :host([data-jb-theme="dark"]) .marimo .contents.light,
-:host([data-jb-theme="dark"]) .marimo .contents.light *,
+:host([data-jb-theme="dark"])
+  .marimo
+  .contents.light
+  *:not(.cm-editor):not(.cm-editor *),
 :host([data-jb-theme="dark"]) .marimo .contents.light .font-prose,
 :host([data-jb-theme="dark"]) .marimo .contents.light .font-prose *,
 :host([data-jb-theme="dark"]) .marimo .contents.light .markdown,
@@ -1398,6 +1572,30 @@ var shadowThemeCss = `
 :host([data-jb-theme="dark"]) .marimo .contents.light [class*="bg-secondary"] {
   background: var(--jbm-surface, #292524) !important;
   color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"]) :where(.marimo [role="alert"], [role="alert"]) {
+  background: var(--jbm-error-bg, #241b1b) !important;
+  border-color: var(--jbm-error-border, rgba(248, 113, 113, 0.42)) !important;
+  color: var(--jbm-error-text, #d6d3d1) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.marimo [role="alert"], [role="alert"])
+  :where(h1, h2, h3, h4, h5, h6, .text-destructive) {
+  color: var(--jbm-error-title, #fca5a5) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.marimo [role="alert"], [role="alert"])
+  :where([data-orientation="vertical"]) {
+  border-color: var(--jbm-error-border, rgba(248, 113, 113, 0.42)) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.marimo [role="alert"], [role="alert"])
+  :where(a) {
+  color: var(--jbm-link, #93c5fd) !important;
 }
 
 /* The generated external-dependencies page imports Slider2D from the upstream
@@ -1560,12 +1758,212 @@ var runtimeError = (error) => {
   return details;
 };
 
+// widget/editor-run-controls.ts
+var editorSelector = "marimo-code-editor";
+var controlSelector = `[${editorRunControlAttribute}="true"]`;
+var requestClientGetterPromise = null;
+var rootIsConnected2 = (root) => {
+  if (root instanceof Document) return true;
+  if (root instanceof ShadowRoot) return root.host.isConnected;
+  return root instanceof Node ? root.isConnected : true;
+};
+var cellIdFromIsland2 = (island) => {
+  try {
+    const runtimeIsland = island;
+    return typeof runtimeIsland.cellId === "string" ? runtimeIsland.cellId : "";
+  } catch {
+    return island.getAttribute("data-cell-id") ?? "";
+  }
+};
+var codeFromJsonAttribute = (value) => {
+  if (!value) return "";
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "string" ? parsed : String(parsed);
+  } catch {
+    return value;
+  }
+};
+var currentEditorCode = (editor) => {
+  const objectId = editor.parentElement?.getAttribute("object-id");
+  const registry = window._marimo_private_UIElementRegistry;
+  if (objectId && typeof registry?.lookupValue === "function") {
+    const value = registry.lookupValue(objectId);
+    if (value !== void 0) return String(value);
+  }
+  const shadowCode = editor.shadowRoot?.querySelector(".cm-content")?.textContent;
+  if (shadowCode) return shadowCode;
+  return codeFromJsonAttribute(editor.getAttribute("data-initial-value"));
+};
+var moduleUrlCandidates = () => {
+  const urls = /* @__PURE__ */ new Set();
+  for (const entry of performance.getEntriesByType("resource")) {
+    if (entry.name.endsWith(".js")) urls.add(entry.name);
+  }
+  for (const node of document.querySelectorAll("script[src], link[href]")) {
+    const url = node instanceof HTMLScriptElement ? node.src : node instanceof HTMLLinkElement ? node.href : "";
+    if (url.endsWith(".js")) urls.add(url);
+  }
+  return Array.from(urls).filter((url) => url.includes("@marimo-team/islands") || url.includes("/marimo/"));
+};
+var isRequestClientGetter = (value) => {
+  if (typeof value !== "function") return false;
+  const source = Function.prototype.toString.call(value);
+  return source.includes("getRequestClient() requires requestClientAtom to be set.");
+};
+var discoverRequestClientGetter = async () => {
+  for (const url of moduleUrlCandidates()) {
+    const moduleExports = await import(url);
+    for (const value of Object.values(moduleExports)) {
+      if (isRequestClientGetter(value)) return value;
+    }
+  }
+  throw new Error("Could not find marimo request client");
+};
+var requestClient = async () => {
+  requestClientGetterPromise ??= discoverRequestClientGetter();
+  const client = await requestClientGetterPromise.then((getter) => getter());
+  if (!client || typeof client !== "object" || typeof client.sendRun !== "function") {
+    throw new Error("marimo request client cannot run cells");
+  }
+  return client;
+};
+var runEditorCell = async (island, editor, button) => {
+  const cellId = cellIdFromIsland2(island);
+  if (!cellId) throw new Error("marimo editor cell id is not ready");
+  button.disabled = true;
+  button.dataset.state = "running";
+  try {
+    await (await requestClient()).sendRun({
+      cellIds: [
+        cellId
+      ],
+      codes: [
+        currentEditorCode(editor)
+      ]
+    });
+    button.removeAttribute("data-state");
+  } catch (error) {
+    button.dataset.state = "error";
+    console.error("Failed to run marimo editor cell", error);
+  } finally {
+    button.disabled = false;
+  }
+};
+var buttonElement = (node) => {
+  if (!(node instanceof HTMLElement) || node.localName !== "button") return null;
+  return node;
+};
+var directOptionalEditor = (island) => {
+  for (const child of island.children) {
+    if (!(child instanceof HTMLElement) || child.localName !== "marimo-ui-element") {
+      continue;
+    }
+    const editor = Array.from(child.children).find((element) => element.localName === editorSelector);
+    if (editor instanceof HTMLElement) return {
+      parent: child,
+      editor
+    };
+  }
+  return null;
+};
+var outputHost = (island, editorParent) => {
+  return Array.from(island.children).find((child) => child !== editorParent) ?? null;
+};
+var isEmptyPlaceholder = (element) => {
+  if (element.localName !== "span") return false;
+  return element.children.length === 0 && (element.textContent ?? "").trim() === "";
+};
+var hasRenderedOutput = (element) => {
+  if (!element) return false;
+  if ((element.textContent ?? "").trim()) return true;
+  for (const child of element.children) {
+    if (child.matches(controlSelector)) continue;
+    if (isEmptyPlaceholder(child)) continue;
+    return true;
+  }
+  return false;
+};
+var removeRunControls = (island) => {
+  for (const control of island.querySelectorAll(controlSelector)) {
+    control.remove();
+  }
+};
+var addRunControl = ({ parent }) => {
+  const existing = buttonElement(parent.querySelector(controlSelector));
+  if (existing) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.title = "Run cell";
+  button.setAttribute("aria-label", "Run cell");
+  button.setAttribute(editorRunControlAttribute, "true");
+  parent.append(button);
+};
+var syncEditorRunControls = (root) => {
+  for (const island of root.querySelectorAll("marimo-island")) {
+    const optionalEditor = directOptionalEditor(island);
+    if (!optionalEditor || hasRenderedOutput(outputHost(island, optionalEditor.parent))) {
+      removeRunControls(island);
+      continue;
+    }
+    for (const control of island.querySelectorAll(controlSelector)) {
+      if (control.parentElement !== optionalEditor.parent) control.remove();
+    }
+    addRunControl(optionalEditor);
+  }
+};
+var scheduleEditorRunControls = (root) => {
+  let released = false;
+  const run = () => {
+    if (!released && rootIsConnected2(root)) syncEditorRunControls(root);
+  };
+  const handleClick = (event) => {
+    const target = event.target instanceof Element ? buttonElement(event.target.closest(controlSelector)) : null;
+    if (!target) return;
+    const editor = target.parentElement?.querySelector(editorSelector);
+    const island = target.closest("marimo-island");
+    if (!(editor instanceof HTMLElement) || !island) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void runEditorCell(island, editor, target);
+  };
+  run();
+  const frame = requestAnimationFrame(run);
+  const timeouts = [
+    100,
+    500,
+    1500,
+    3e3,
+    5e3
+  ].map((delay) => setTimeout(run, delay));
+  const observer = new MutationObserver(run);
+  observer.observe(root, {
+    childList: true,
+    subtree: true
+  });
+  const eventTarget = root;
+  eventTarget.addEventListener("click", handleClick, true);
+  return () => {
+    released = true;
+    cancelAnimationFrame(frame);
+    timeouts.forEach(clearTimeout);
+    observer.disconnect();
+    eventTarget.removeEventListener("click", handleClick, true);
+  };
+};
+
 // widget/theme.ts
 var observedShadowRoots = /* @__PURE__ */ new WeakMap();
 var observedShadowRootStyles = /* @__PURE__ */ new WeakMap();
 var shadowRootsByMount = /* @__PURE__ */ new Map();
 var themedRoots = /* @__PURE__ */ new Map();
 var themeObserverStarted = false;
+var managedBodyTheme = {
+  classes: /* @__PURE__ */ new Set(),
+  datasetMode: false,
+  datasetTheme: false,
+  theme: ""
+};
 var ensureThemeStyle = () => {
   if (document.getElementById(themeStyleId)) return;
   const style = document.createElement("style");
@@ -1663,19 +2061,124 @@ var colorSchemeFromDocument = () => {
   if (luminance != null) return luminance < 0.5 ? "dark" : "light";
   return globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
 };
-var syncHostTheme = (host) => {
+var bodyThemeClasses = (theme) => [
+  theme,
+  `${theme}-theme`
+];
+var syncDocumentMarimoTheme = (theme) => {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+  const desiredClasses = new Set(bodyThemeClasses(theme));
+  const nextManagedClasses = /* @__PURE__ */ new Set();
+  for (const className of managedBodyTheme.classes) {
+    if (!desiredClasses.has(className) && body.classList.contains(className)) {
+      body.classList.remove(className);
+    }
+  }
+  for (const className of desiredClasses) {
+    if (body.classList.contains(className)) {
+      if (managedBodyTheme.classes.has(className)) {
+        nextManagedClasses.add(className);
+      }
+      continue;
+    }
+    body.classList.add(className);
+    nextManagedClasses.add(className);
+  }
+  if (managedBodyTheme.datasetTheme || !body.hasAttribute("data-theme")) {
+    if (body.dataset.theme !== theme) body.dataset.theme = theme;
+    managedBodyTheme.datasetTheme = true;
+  }
+  if (managedBodyTheme.datasetMode || !body.hasAttribute("data-mode")) {
+    if (body.dataset.mode !== theme) body.dataset.mode = theme;
+    managedBodyTheme.datasetMode = true;
+  }
+  managedBodyTheme = {
+    classes: nextManagedClasses,
+    datasetMode: managedBodyTheme.datasetMode,
+    datasetTheme: managedBodyTheme.datasetTheme,
+    theme
+  };
+};
+var releaseDocumentMarimoTheme = () => {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+  for (const className of managedBodyTheme.classes) {
+    if (body.classList.contains(className)) body.classList.remove(className);
+  }
+  if (managedBodyTheme.datasetTheme && body.dataset.theme === managedBodyTheme.theme) {
+    delete body.dataset.theme;
+  }
+  if (managedBodyTheme.datasetMode && body.dataset.mode === managedBodyTheme.theme) {
+    delete body.dataset.mode;
+  }
+  managedBodyTheme = {
+    classes: /* @__PURE__ */ new Set(),
+    datasetMode: false,
+    datasetTheme: false,
+    theme: ""
+  };
+};
+var syncMarimoContentsTheme = (root, theme) => {
+  const opposite = theme === "dark" ? "light" : "dark";
+  for (const node of root.querySelectorAll(".marimo .contents.light, .marimo .contents.dark")) {
+    if (!(node instanceof HTMLElement)) continue;
+    node.classList.remove(opposite);
+    node.classList.add(theme);
+  }
+};
+var syncCodeEditorTheme = (root, theme) => {
+  const editors = root instanceof HTMLElement && root.localName === "marimo-code-editor" ? [
+    root,
+    ...root.querySelectorAll("marimo-code-editor")
+  ] : Array.from(root.querySelectorAll("marimo-code-editor"));
+  for (const node of editors) {
+    if (!(node instanceof HTMLElement)) continue;
+    const managed = node.getAttribute(codeEditorThemeAttribute) === "true";
+    if (!managed && node.hasAttribute("data-theme")) continue;
+    const encodedTheme = JSON.stringify(theme);
+    if (node.getAttribute("data-theme") !== encodedTheme) {
+      node.setAttribute("data-theme", encodedTheme);
+    }
+    node.setAttribute(codeEditorThemeAttribute, "true");
+  }
+};
+var scratchpadTipTitle = "Need a scratchpad?";
+var normalizedElementText = (element) => (element.textContent ?? "").replace(/\s+/g, " ").trim();
+var scratchpadTipContainer = (trigger) => {
+  let target = trigger;
+  while (target.parentElement instanceof HTMLElement && normalizedElementText(target.parentElement) === scratchpadTipTitle) {
+    target = target.parentElement;
+  }
+  return target;
+};
+var syncScratchpadTips = (root) => {
+  for (const node of root.querySelectorAll("button")) {
+    if (!(node instanceof HTMLElement)) continue;
+    if (normalizedElementText(node) !== scratchpadTipTitle) continue;
+    scratchpadTipContainer(node).setAttribute(scratchpadTipAttribute, "true");
+  }
+};
+var syncHostTheme = (host, theme) => {
   if (!(host instanceof HTMLElement)) return;
-  const theme = colorSchemeFromDocument();
   host.dataset.jbTheme = theme;
   host.dataset.jbColorScheme = theme;
 };
 var installShadowTheme = (root, stylesheets = [], styleBlocks = [], owner = null) => {
   ensureThemeObserver();
-  if (root instanceof HTMLElement) syncHostTheme(root);
+  const theme = colorSchemeFromDocument();
+  syncDocumentMarimoTheme(theme);
+  if (root instanceof HTMLElement) syncHostTheme(root, theme);
+  syncMarimoContentsTheme(root, theme);
+  syncScratchpadTips(root);
+  syncCodeEditorTheme(root, theme);
   for (const node of root.querySelectorAll("*")) {
     const shadow = node.shadowRoot;
     if (!shadow) continue;
-    syncHostTheme(node);
+    syncHostTheme(node, theme);
+    syncMarimoContentsTheme(shadow, theme);
+    syncScratchpadTips(shadow);
+    syncCodeEditorTheme(shadow, theme);
     observeShadowRoot(shadow, stylesheets, styleBlocks, owner);
     if (!shadow.getElementById(shadowThemeStyleId)) {
       const style = document.createElement("style");
@@ -1696,6 +2199,7 @@ var refreshThemedRoots = () => {
     }
     installShadowTheme(root, customStyles.stylesheets, customStyles.styleBlocks, root);
   }
+  if (themedRoots.size === 0) releaseDocumentMarimoTheme();
 };
 var ensureThemeObserver = () => {
   if (themeObserverStarted) return;
@@ -1808,6 +2312,7 @@ var scheduleShadowTheme = (mount, stylesheets = [], styleBlocks = []) => {
     observer.disconnect();
     releaseShadowObservers(mount);
     themedRoots.delete(mount);
+    if (themedRoots.size === 0) releaseDocumentMarimoTheme();
   };
 };
 
@@ -2034,6 +2539,8 @@ var mountMarimo = (model, el) => {
   };
   let releaseCellContainers = () => {
   };
+  let releaseEditorRunControls = () => {
+  };
   let releaseMolabAction = () => {
   };
   stripHeadOnlyNodes(output.body);
@@ -2051,6 +2558,7 @@ var mountMarimo = (model, el) => {
     releaseMimeObserver = observeSuppressedMimeRenderers(mount, output.suppressMimetypes);
     releaseTheme = scheduleShadowTheme(mount, output.customStylesheets, output.customStyleBlocks);
     releaseCellContainers = scheduleIslandCellContainers(mount);
+    releaseEditorRunControls = scheduleEditorRunControls(mount);
   } else {
     mount.replaceChildren();
   }
@@ -2093,6 +2601,7 @@ var mountMarimo = (model, el) => {
     releaseMimeObserver();
     releaseTheme();
     releaseCellContainers();
+    releaseEditorRunControls();
     releaseMolabAction();
     mount.remove();
   };

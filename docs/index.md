@@ -32,7 +32,7 @@ mo.md(
     This Markdown came from a Python cell. Change the slider and the output changes
     in place.
     """
-)
+).callout('info')
 ```
 
 ## How it works

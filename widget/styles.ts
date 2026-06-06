@@ -3,6 +3,9 @@ export const outputClass = "marimo-jupyter-book-output";
 export const themeStyleId = "marimo-jupyter-book-theme";
 export const shadowThemeStyleId = "marimo-jupyter-book-shadow-theme";
 export const customStyleAttribute = "data-jupyter-book-marimo-custom-style";
+export const scratchpadTipAttribute = "data-jupyter-book-marimo-scratchpad-tip";
+export const codeEditorThemeAttribute = "data-jupyter-book-marimo-code-editor-theme";
+export const editorRunControlAttribute = "data-jupyter-book-marimo-editor-run-control";
 
 /*
  * Styling contract:
@@ -12,11 +15,14 @@ export const customStyleAttribute = "data-jupyter-book-marimo-custom-style";
  */
 export const globalThemeCss = `
 .${outputClass} {
+  box-sizing: border-box;
   color: inherit;
   color-scheme: inherit;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+  --jbm-error-editor-gap: 0.5rem;
+  --jbm-output-margin-block: 1rem;
   --jbm-background: var(--myst-color-background, var(--pst-color-background, Canvas));
   --jbm-foreground: var(--myst-color-text, var(--pst-color-text-base, CanvasText));
   --jbm-surface: var(--myst-color-surface, var(--pst-color-surface, Field));
@@ -35,6 +41,10 @@ export const globalThemeCss = `
   --jbm-inline-code-fg: var(--jbm-foreground);
   --jbm-hover-bg: color-mix(in srgb, var(--jbm-foreground) 8%, transparent);
   --jbm-selection-bg: color-mix(in srgb, var(--jbm-accent) 28%, transparent);
+  --jbm-error-bg: transparent;
+  --jbm-error-border: #e5e7eb;
+  --jbm-error-title: #ea5d5d;
+  --jbm-error-text: #64748b;
 }
 
 .${outputClass}[data-jb-theme="dark"] {
@@ -48,10 +58,22 @@ export const globalThemeCss = `
   --jbm-muted-foreground: var(--myst-color-text-muted, var(--pst-color-text-muted, #a8a29e));
   --jbm-code-bg: var(--myst-color-code-background, var(--pst-color-on-background, #292524));
   --jbm-code-fg: var(--jbm-foreground);
+  --jbm-error-bg: color-mix(in srgb, #f87171 6%, var(--jbm-background));
+  --jbm-error-border: color-mix(in srgb, #f87171 42%, var(--jbm-border));
+  --jbm-error-title: #fca5a5;
+  --jbm-error-text: #d6d3d1;
 }
 
 .${outputClass}[data-jb-theme="light"] {
   color-scheme: light;
+}
+
+.${outputClass}:where(
+  :has(> marimo-island:not([hidden]):not([data-jupyter-book-marimo-hide-output="true"]) > :not(span:empty)),
+  :has(marimo-cell-output > :not(span:empty)),
+  :has(marimo-ui-element)
+) {
+  margin-block: var(--jbm-output-margin-block, 1rem);
 }
 
 .${outputClass}[data-jb-theme="dark"]
@@ -127,6 +149,113 @@ export const globalThemeCss = `
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+}
+
+/*
+ * Jupyter Book supplies the page surface. Keep marimo island variables and
+ * runtime ownership, but let each component draw its own visible box.
+ */
+.${outputClass} > marimo-island.marimo {
+  display: contents;
+}
+
+.${outputClass} :where([${scratchpadTipAttribute}="true"]) {
+  display: none !important;
+}
+
+.${outputClass} :where(marimo-ui-element:has(> marimo-code-editor)) {
+  display: block !important;
+  max-width: 100%;
+  position: relative !important;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]) {
+  align-items: center;
+  background: var(--jbm-surface, Field);
+  border: 1px solid var(--jbm-border, ButtonBorder);
+  border-radius: 0.375rem;
+  color: var(--jbm-foreground, ButtonText);
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.5rem;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 0.35rem;
+  top: 0.35rem;
+  width: 1.5rem;
+  z-index: 20;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"])::before {
+  border-block: 0.28rem solid transparent;
+  border-inline-start: 0.45rem solid currentColor;
+  content: "";
+  display: block;
+  margin-inline-start: 0.08rem;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]:hover) {
+  background: var(--jbm-hover-bg, ButtonFace);
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]:focus-visible) {
+  outline: 2px solid var(--jbm-focus-ring, Highlight);
+  outline-offset: 2px;
+}
+
+.${outputClass} :where([${editorRunControlAttribute}="true"]:disabled) {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+/*
+ * Exported editor errors do not include the full notebook cell output-area
+ * wrapper. Restore the padding at the alert boundary so intentional error
+ * examples keep the same readable inset in static books.
+ */
+.${outputClass}
+  :where(
+    marimo-island.marimo > [role="alert"],
+    marimo-island.marimo > :has(> [role="alert"]) > [role="alert"],
+    marimo-island.marimo [role="alert"]
+  ) {
+  background: var(--jbm-error-bg, Canvas) !important;
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+  box-sizing: border-box;
+  color: var(--jbm-error-text, CanvasText) !important;
+  padding: 1rem !important;
+}
+
+.${outputClass}
+  :where(marimo-island.marimo [role="alert"])
+  :where(h1, h2, h3, h4, h5, h6, .text-destructive) {
+  color: var(--jbm-error-title, #dc2626) !important;
+}
+
+.${outputClass}
+  :where(marimo-island.marimo [role="alert"])
+  :where([data-orientation="vertical"]) {
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+}
+
+.${outputClass}
+  :where(marimo-island.marimo [role="alert"])
+  :where(a) {
+  color: var(--jbm-link, LinkText) !important;
+}
+
+/*
+ * marimo renders visible source editors as siblings of the server output. Keep
+ * an intentional gap when an error display is followed by that source editor.
+ */
+.${outputClass}
+  :where(
+    marimo-island.marimo > [role="alert"] + marimo-ui-element > marimo-code-editor,
+    marimo-island.marimo > :has(> [role="alert"]) + marimo-ui-element > marimo-code-editor
+  ) {
+  margin-block-start: var(--jbm-error-editor-gap, 0.5rem);
 }
 
 .${outputClass}
@@ -281,10 +410,52 @@ export const shadowThemeCss = `
   --cm-background: var(--jbm-code-bg, #292524);
   --cm-foreground: var(--jbm-code-fg, #e7e5e4);
   --cm-comment: var(--jbm-muted-foreground, #a8a29e);
+  --jbm-error-bg: color-mix(in srgb, #f87171 6%, var(--jbm-background, #1c1917));
+  --jbm-error-border: color-mix(in srgb, #f87171 42%, var(--jbm-border, rgba(168, 162, 158, 0.36)));
+  --jbm-error-title: #fca5a5;
+  --jbm-error-text: #d6d3d1;
 }
 
 :host([data-jb-theme="light"]) {
   color-scheme: light;
+}
+
+:host :where([${scratchpadTipAttribute}="true"]) {
+  display: none !important;
+}
+
+:host
+  :where(
+    .marimo > [role="alert"],
+    .marimo > :has(> [role="alert"]) > [role="alert"],
+    .marimo [role="alert"],
+    [role="alert"]
+  ) {
+  background: var(--jbm-error-bg, Canvas) !important;
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+  box-sizing: border-box;
+  color: var(--jbm-error-text, CanvasText) !important;
+  padding: 1rem !important;
+}
+
+:host
+  :where(.marimo [role="alert"], [role="alert"])
+  :where(h1, h2, h3, h4, h5, h6, .text-destructive) {
+  color: var(--jbm-error-title, #dc2626) !important;
+}
+
+:host
+  :where(.marimo [role="alert"], [role="alert"])
+  :where([data-orientation="vertical"]) {
+  border-color: var(--jbm-error-border, ButtonBorder) !important;
+}
+
+:host :where(.marimo [role="alert"], [role="alert"]) :where(a) {
+  color: var(--jbm-link, LinkText) !important;
+}
+
+:host(:not([data-min-height])) :where(.cm-editor) {
+  min-height: 0 !important;
 }
 
 /* marimo's UI utilities are layered. Some notebook widget stylesheets inject
@@ -390,7 +561,7 @@ export const shadowThemeCss = `
     .admonition,
     [class*="admonition"],
     .callout,
-    .marimo *,
+    .marimo *:not(.cm-editor):not(.cm-editor *),
     .markdown.prose,
     .markdown.prose *,
     .codehilite,
@@ -544,7 +715,10 @@ export const shadowThemeCss = `
 }
 
 :host([data-jb-theme="dark"]) .marimo .contents.light,
-:host([data-jb-theme="dark"]) .marimo .contents.light *,
+:host([data-jb-theme="dark"])
+  .marimo
+  .contents.light
+  *:not(.cm-editor):not(.cm-editor *),
 :host([data-jb-theme="dark"]) .marimo .contents.light .font-prose,
 :host([data-jb-theme="dark"]) .marimo .contents.light .font-prose *,
 :host([data-jb-theme="dark"]) .marimo .contents.light .markdown,
@@ -602,6 +776,30 @@ export const shadowThemeCss = `
 :host([data-jb-theme="dark"]) .marimo .contents.light [class*="bg-secondary"] {
   background: var(--jbm-surface, #292524) !important;
   color: var(--jbm-foreground, #e7e5e4) !important;
+}
+
+:host([data-jb-theme="dark"]) :where(.marimo [role="alert"], [role="alert"]) {
+  background: var(--jbm-error-bg, #241b1b) !important;
+  border-color: var(--jbm-error-border, rgba(248, 113, 113, 0.42)) !important;
+  color: var(--jbm-error-text, #d6d3d1) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.marimo [role="alert"], [role="alert"])
+  :where(h1, h2, h3, h4, h5, h6, .text-destructive) {
+  color: var(--jbm-error-title, #fca5a5) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.marimo [role="alert"], [role="alert"])
+  :where([data-orientation="vertical"]) {
+  border-color: var(--jbm-error-border, rgba(248, 113, 113, 0.42)) !important;
+}
+
+:host([data-jb-theme="dark"])
+  :where(.marimo [role="alert"], [role="alert"])
+  :where(a) {
+  color: var(--jbm-link, #93c5fd) !important;
 }
 
 /* The generated external-dependencies page imports Slider2D from the upstream

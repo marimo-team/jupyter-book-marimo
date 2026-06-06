@@ -100,6 +100,8 @@ happen.
 ```
 
 ```{marimo} python
+:editor: true
+
 changed = False
 ```
 

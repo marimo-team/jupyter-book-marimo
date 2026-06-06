@@ -1,6 +1,8 @@
 import {
+  codeEditorThemeAttribute,
   customStyleAttribute,
   globalThemeCss,
+  scratchpadTipAttribute,
   shadowThemeCss,
   shadowThemeStyleId,
   themeStyleId,
@@ -18,6 +20,17 @@ const shadowRootsByMount = new Map<HTMLElement, Set<ShadowRoot>>();
 const themedRoots = new Map<HTMLElement, ShadowStyleSet>();
 
 let themeObserverStarted = false;
+let managedBodyTheme: {
+  classes: Set<string>;
+  datasetMode: boolean;
+  datasetTheme: boolean;
+  theme: string;
+} = {
+  classes: new Set(),
+  datasetMode: false,
+  datasetTheme: false,
+  theme: "",
+};
 
 export const ensureThemeStyle = (): void => {
   if (document.getElementById(themeStyleId)) return;
@@ -158,9 +171,140 @@ const colorSchemeFromDocument = (): string => {
     : "light";
 };
 
-const syncHostTheme = (host: Element): void => {
+const bodyThemeClasses = (theme: string): string[] => [theme, `${theme}-theme`];
+
+const syncDocumentMarimoTheme = (theme: string): void => {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+
+  const desiredClasses = new Set(bodyThemeClasses(theme));
+  const nextManagedClasses = new Set<string>();
+
+  for (const className of managedBodyTheme.classes) {
+    if (!desiredClasses.has(className) && body.classList.contains(className)) {
+      body.classList.remove(className);
+    }
+  }
+
+  for (const className of desiredClasses) {
+    if (body.classList.contains(className)) {
+      if (managedBodyTheme.classes.has(className)) {
+        nextManagedClasses.add(className);
+      }
+      continue;
+    }
+    body.classList.add(className);
+    nextManagedClasses.add(className);
+  }
+
+  if (managedBodyTheme.datasetTheme || !body.hasAttribute("data-theme")) {
+    if (body.dataset.theme !== theme) body.dataset.theme = theme;
+    managedBodyTheme.datasetTheme = true;
+  }
+  if (managedBodyTheme.datasetMode || !body.hasAttribute("data-mode")) {
+    if (body.dataset.mode !== theme) body.dataset.mode = theme;
+    managedBodyTheme.datasetMode = true;
+  }
+
+  managedBodyTheme = {
+    classes: nextManagedClasses,
+    datasetMode: managedBodyTheme.datasetMode,
+    datasetTheme: managedBodyTheme.datasetTheme,
+    theme,
+  };
+};
+
+const releaseDocumentMarimoTheme = (): void => {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+
+  for (const className of managedBodyTheme.classes) {
+    if (body.classList.contains(className)) body.classList.remove(className);
+  }
+  if (
+    managedBodyTheme.datasetTheme &&
+    body.dataset.theme === managedBodyTheme.theme
+  ) {
+    delete body.dataset.theme;
+  }
+  if (
+    managedBodyTheme.datasetMode &&
+    body.dataset.mode === managedBodyTheme.theme
+  ) {
+    delete body.dataset.mode;
+  }
+  managedBodyTheme = {
+    classes: new Set(),
+    datasetMode: false,
+    datasetTheme: false,
+    theme: "",
+  };
+};
+
+const syncMarimoContentsTheme = (
+  root: ParentNode,
+  theme: string,
+): void => {
+  const opposite = theme === "dark" ? "light" : "dark";
+  for (
+    const node of root.querySelectorAll(
+      ".marimo .contents.light, .marimo .contents.dark",
+    )
+  ) {
+    if (!(node instanceof HTMLElement)) continue;
+    node.classList.remove(opposite);
+    node.classList.add(theme);
+  }
+};
+
+const syncCodeEditorTheme = (
+  root: ParentNode,
+  theme: string,
+): void => {
+  const editors = root instanceof HTMLElement &&
+      root.localName === "marimo-code-editor"
+    ? [root, ...root.querySelectorAll("marimo-code-editor")]
+    : Array.from(root.querySelectorAll("marimo-code-editor"));
+
+  for (const node of editors) {
+    if (!(node instanceof HTMLElement)) continue;
+    const managed = node.getAttribute(codeEditorThemeAttribute) === "true";
+    if (!managed && node.hasAttribute("data-theme")) continue;
+
+    const encodedTheme = JSON.stringify(theme);
+    if (node.getAttribute("data-theme") !== encodedTheme) {
+      node.setAttribute("data-theme", encodedTheme);
+    }
+    node.setAttribute(codeEditorThemeAttribute, "true");
+  }
+};
+
+const scratchpadTipTitle = "Need a scratchpad?";
+
+const normalizedElementText = (element: Element): string =>
+  (element.textContent ?? "").replace(/\s+/g, " ").trim();
+
+const scratchpadTipContainer = (trigger: HTMLElement): HTMLElement => {
+  let target = trigger;
+  while (
+    target.parentElement instanceof HTMLElement &&
+    normalizedElementText(target.parentElement) === scratchpadTipTitle
+  ) {
+    target = target.parentElement;
+  }
+  return target;
+};
+
+const syncScratchpadTips = (root: ParentNode): void => {
+  for (const node of root.querySelectorAll("button")) {
+    if (!(node instanceof HTMLElement)) continue;
+    if (normalizedElementText(node) !== scratchpadTipTitle) continue;
+    scratchpadTipContainer(node).setAttribute(scratchpadTipAttribute, "true");
+  }
+};
+
+const syncHostTheme = (host: Element, theme: string): void => {
   if (!(host instanceof HTMLElement)) return;
-  const theme = colorSchemeFromDocument();
   host.dataset.jbTheme = theme;
   host.dataset.jbColorScheme = theme;
 };
@@ -172,12 +316,20 @@ const installShadowTheme = (
   owner: HTMLElement | null = null,
 ): void => {
   ensureThemeObserver();
-  if (root instanceof HTMLElement) syncHostTheme(root);
+  const theme = colorSchemeFromDocument();
+  syncDocumentMarimoTheme(theme);
+  if (root instanceof HTMLElement) syncHostTheme(root, theme);
+  syncMarimoContentsTheme(root, theme);
+  syncScratchpadTips(root);
+  syncCodeEditorTheme(root, theme);
   for (const node of root.querySelectorAll("*")) {
     const shadow = node.shadowRoot;
     if (!shadow) continue;
 
-    syncHostTheme(node);
+    syncHostTheme(node, theme);
+    syncMarimoContentsTheme(shadow, theme);
+    syncScratchpadTips(shadow);
+    syncCodeEditorTheme(shadow, theme);
     observeShadowRoot(shadow, stylesheets, styleBlocks, owner);
 
     if (!shadow.getElementById(shadowThemeStyleId)) {
@@ -206,6 +358,7 @@ const refreshThemedRoots = (): void => {
       root,
     );
   }
+  if (themedRoots.size === 0) releaseDocumentMarimoTheme();
 };
 
 const ensureThemeObserver = (): void => {
@@ -339,5 +492,6 @@ export const scheduleShadowTheme = (
     observer.disconnect();
     releaseShadowObservers(mount);
     themedRoots.delete(mount);
+    if (themedRoots.size === 0) releaseDocumentMarimoTheme();
   };
 };

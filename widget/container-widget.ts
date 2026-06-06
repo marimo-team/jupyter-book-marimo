@@ -14,6 +14,7 @@ import {
   stripHeadOnlyNodes,
   suppressMimeRenderers,
 } from "./output-dom.ts";
+import { scheduleEditorRunControls } from "./editor-run-controls.ts";
 import {
   ensureCustomStyleBlocks,
   ensureCustomStylesheets,
@@ -86,6 +87,7 @@ const mountMarimo = (
   let releaseMimeObserver: Release = () => {};
   let releaseTheme: Release = () => {};
   let releaseCellContainers: Release = () => {};
+  let releaseEditorRunControls: Release = () => {};
   let releaseMolabAction: Release = () => {};
 
   stripHeadOnlyNodes(output.body);
@@ -117,6 +119,7 @@ const mountMarimo = (
       output.customStyleBlocks,
     );
     releaseCellContainers = scheduleIslandCellContainers(mount);
+    releaseEditorRunControls = scheduleEditorRunControls(mount);
   } else {
     mount.replaceChildren();
   }
@@ -172,6 +175,7 @@ const mountMarimo = (
     releaseMimeObserver();
     releaseTheme();
     releaseCellContainers();
+    releaseEditorRunControls();
     releaseMolabAction();
     mount.remove();
   };
