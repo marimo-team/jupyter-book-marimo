@@ -592,7 +592,7 @@ wheels = [
 
 [[package]]
 name = "jupyter-book-marimo"
-version = "0.0.0a0"
+version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "marimo" },
