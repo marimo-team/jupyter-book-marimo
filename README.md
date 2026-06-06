@@ -82,15 +82,7 @@ on load.
 
 ## Docs
 
-- [Live docs index](docs/index.md): quick proof that static pages hydrate into reactive
-  marimo islands.
-- [Installation](docs/api/install.md): install the package and register the executable
-  plugin.
-- [Authoring](docs/api/authoring.md): full `{marimo}` directive option list.
-- [Page configuration](docs/api/configuration.md): defaults, headers, and page-local
-  dependencies.
-- [Styling](docs/api/styling.md): public CSS hooks for book themes.
-- [Runtime assets](docs/api/runtime-assets.md): bridge assets, hydration payloads, and
-  publishing constraints.
+Read the user docs at
+[marimo-team.github.io/jupyter-book-marimo](https://marimo-team.github.io/jupyter-book-marimo/).
 
-For the full local workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
+For the full local development workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
