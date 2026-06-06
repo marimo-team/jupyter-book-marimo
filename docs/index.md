@@ -1,47 +1,101 @@
 ---
-title: jupyter-book-marimo
+title: 🟢 🟠 marimo + Jupyter Book
 ---
 
-```{marimo-config}
-:header: # Copyright 2026 Marimo. All rights reserved
-```
+Static book. Interactive cells.
 
-Reactive marimo cells for Jupyter Book.
+`jupyter-book-marimo` lets you write marimo cells in ordinary MyST pages, build your
+Jupyter Book as static HTML, and keep the outputs interactive in the browser.
 
-## Example
-
-Static HTML, live marimo islands. The build executes the Python cells below, and the
-browser hydrates the same output so the slider can update dependent Markdown.
+Move the slider. The page has already been built, served, and loaded as static HTML. The
+Markdown below still updates because marimo hydrates the cells after the page loads.
 
 ```{marimo} python
 :editor: true
 
 import marimo as mo
 
-demo_count = mo.ui.slider(start=1, stop=10, step=1, label="islands")
+demo_count = mo.ui.slider(
+    start=1,
+    stop=10,
+    step=1,
+    label="exclamation points"
+)
 demo_count
 ```
 
 ```{marimo} python
-mo.md(f"Static HTML, live islands: {'🏝️' * round(demo_count.value)}")
+mo.md(
+    f"""
+    ## Hello from marimo{"!" * demo_count.value}
+
+    This Markdown came from a Python cell. Change the slider and the output changes
+    in place.
+    """
+).callout("info")
 ```
 
-## Build and hydration
+## What is going on?
 
-The two cells above are ordinary MyST `{marimo}` directives. At build time,
-`jupyter-book-marimo` executes them with marimo and writes the rendered output into the
-book. In the browser, marimo hydrates the same islands so the slider can still update
-the dependent Markdown output.
+Jupyter Book gives you MyST, navigation, cross-references, and static publishing. marimo
+gives you reactive Python, SQL, and Markdown cells. This
+[plugin](https://mystmd.org/guide/executable-plugins) connects them: it executes
+`{marimo}` directives during the book build, writes static HTML output, and loads the
+marimo island runtime so dependent cells can react in the reader's browser.
 
 ## Quickstart
 
-Install the package:
+Write a MyST page with `{marimo}` cells.
+
+For instance, this cell:
+
+````markdown
+```{marimo} python
+result = "Only the cell output is shown."
+result
+```
+````
+
+produces this output:
+
+```{marimo} python
+result = "Only the cell output is shown."
+result
+```
+
+You can make a cell editable:
+
+````markdown
+```{marimo} python
+:editor: true
+
+editor_result = "Change me" + ("!" * 3)
+editor_result
+```
+````
+
+```{marimo} python
+:editor: true
+
+editor_result = "Change me" + ("!" * 3)
+editor_result
+```
+
+And another cell can read its value:
+
+```{marimo} python
+mo.md(f"The value of `editor_result` is **{editor_result}**.")
+```
+
+### But how do I run this?
+
+Install the plugin in the same environment as Jupyter Book.
 
 ```bash
 pip install jupyter-book-marimo
 ```
 
-Register the plugin:
+Register the executable plugin in `myst.yml`.
 
 ```yaml
 project:
@@ -50,12 +104,14 @@ project:
       path: .venv/bin/jupyter-book-marimo
 ```
 
-Write marimo cells in a Markdown page:
+Use the executable path for your book environment. When `myst.yml` lives in `docs/` and
+the virtual environment lives at the repository root, use
+`../.venv/bin/jupyter-book-marimo`.
+
+Then write cells in any MyST page:
 
 ````markdown
 ```{marimo} python
-:editor: true
-
 import marimo as mo
 
 slider = mo.ui.slider(start=1, stop=10, step=1, label="islands")
@@ -73,10 +129,17 @@ Build the book:
 jupyter-book build --html
 ```
 
+The tutorials in the sidebar are marimo notebooks rendered through this plugin. Open
+them to see larger examples with UI, data flow, SQL, layouts, Markdown, and plots.
+
 ## Reference
 
-- [Get started](api/install.md) with installation and `myst.yml` setup.
-- Use the [reference](api/index.md) for directive syntax, page configuration, styling,
-  and runtime assets.
-- Open the [tutorials](tutorials/index.md) for marimo examples rendered through the
-  plugin. Tutorial pages are separate from the API reference.
+- [Getting started](api/install.md): install the package and register the executable
+  plugin.
+- [Authoring cells](api/authoring.md): write Python, SQL, and Markdown cells.
+- [Page configuration](api/configuration.md): set defaults, headers, Molab export, and
+  page-local dependencies.
+- [Styling hooks](api/styling.md): map book theme variables into marimo output.
+- [Runtime assets](api/runtime-assets.md): understand the anywidget bridge and marimo
+  hydration payload.
+- [Tutorials](tutorials/index.md): read marimo examples rendered through the plugin.

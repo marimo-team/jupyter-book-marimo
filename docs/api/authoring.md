@@ -4,10 +4,8 @@ title: Authoring cells
 
 # Authoring cells
 
-Use the MyST directive name `marimo` and pass the cell language as the required
-argument. The language must be exactly `python`, `sql`, or `markdown`. Python cells use
-the names defined by earlier cells or the page header. SQL and Markdown cells import
-marimo internally, so they do not require a separate `import marimo as mo` cell.
+Use the `marimo` MyST directive with an explicit language argument. The language must be
+exactly `python`, `sql`, or `markdown`.
 
 ````markdown
 ```{marimo} python
@@ -18,13 +16,16 @@ slider
 ```
 
 ```{marimo} python
-"🏝️" * slider.value
+mo.md(f"The slider is set to **{slider.value}**.")
 ```
 ````
 
-## Cell options
+Python cells can read names defined by earlier cells and by the page header. SQL and
+Markdown cells are converted to Python before execution and import marimo internally.
 
-Write cell options as MyST directive options.
+## Cell Options
+
+Write options with standard MyST directive syntax:
 
 ````markdown
 ```{marimo} python
@@ -36,42 +37,50 @@ mo.md("show source and output")
 ```
 ````
 
-| Option            | Type    | Default | Behavior                                |
-| ----------------- | ------- | ------- | --------------------------------------- |
-| `:eval:`          | boolean | `true`  | run the cell during the book build      |
-| `:echo:`          | boolean | `false` | render source as a static code block    |
-| `:editor:`        | boolean | `false` | render source in a marimo editor        |
-| `:output:`        | boolean | `true`  | include the browser output island       |
-| `:server-output:` | boolean | `true`  | include build-time preview HTML         |
-| `:error:`         | boolean | `true`  | render marimo error output              |
-| `:include:`       | boolean | `true`  | include this cell's node in the page    |
-| `:hide-code:`     | boolean | `false` | hide rendered source code               |
-| `:hide-output:`   | boolean | `false` | hide rendered output                    |
-| `:disabled:`      | boolean | `false` | skip execution                          |
-| `:unparsable:`    | boolean | `false` | skip parsing intentionally invalid code |
-| `:name:`          | string  | none    | set the marimo cell name                |
-| `:column:`        | number  | none    | set the marimo column index             |
+| Option            | Type    | Default | Behavior                                                           |
+| ----------------- | ------- | ------- | ------------------------------------------------------------------ |
+| `:eval:`          | boolean | `true`  | Execute the cell during the build                                  |
+| `:echo:`          | boolean | `false` | Render source as static code                                       |
+| `:editor:`        | boolean | `false` | Render source in a marimo code editor                              |
+| `:output:`        | boolean | `true`  | Render the browser output island                                   |
+| `:server-output:` | boolean | `true`  | Include build-time preview HTML in the output island               |
+| `:error:`         | boolean | `true`  | Render marimo error output instead of failing on error MIME output |
+| `:include:`       | boolean | `true`  | Keep this cell's visible node in the page                          |
+| `:hide-code:`     | boolean | `false` | Hide rendered source when page defaults would show it              |
+| `:hide-output:`   | boolean | `false` | Hide rendered output when page defaults would show it              |
+| `:disabled:`      | boolean | `false` | Skip execution and keep optional visible source                    |
+| `:unparsable:`    | boolean | `false` | Skip parsing intentionally invalid code                            |
+| `:name:`          | string  | none    | Set the marimo cell name                                           |
+| `:column:`        | number  | none    | Set the marimo column index                                        |
 
-Unsupported options fail the build before execution. Conflicting options also fail the
-build: do not combine `:echo: true` with `:hide-code: true`, `:output: true` with
-`:hide-output: true`, or `:eval: true` with `:disabled: true`.
+Unsupported options fail the build before execution. The plugin also rejects a single
+directive that explicitly sets both sides of these option pairs:
+
+- `:echo: true` and `:hide-code: true`
+- `:output: true` and `:hide-output: true`
+- `:eval: true` and `:disabled: true`
 
 Visibility options are presentational. Executed cells are serialized into the static
 page so marimo can hydrate islands in the browser. Do not put credentials, private
-logic, or untrusted input in cells that ship with a public book, even when `:echo:` is
-false or `:hide-code:` is true.
+logic, or untrusted input in cells that ship with a public book.
 
-`:error: false` is build-strict. If marimo execution produces an error MIME renderer,
-the build fails at that cell. Successful output keeps text, HTML, and other non-error
-MIME renderers.
+## Execution And Visibility
 
-Use `:server-output: false` when a cell should execute and hydrate as a marimo island
-with an empty build-time preview. The page keeps the shared notebook source and runtime
+`include` controls the visible node, not execution. Use `:include: false` when a cell
+should run for downstream cells but should not render code or output in the page. Use
+`:eval: false`, `:disabled: true`, or `:unparsable: true` when the cell should not run.
+
+Use `:server-output: false` when a cell should execute and hydrate in the browser with
+an empty build-time preview. The page keeps the shared notebook source and runtime
 payload. That cell's `<marimo-cell-output>` starts empty.
+
+Use `:error: false` for strict builds. If marimo execution produces an error MIME
+renderer, the build fails at that cell. Successful output keeps text, HTML, and other
+non-error MIME renderers.
 
 ## SQL cells
 
-SQL cells use the same directive and the `sql` language argument.
+SQL cells use the same directive with the `sql` language argument:
 
 ````markdown
 ```{marimo} sql
@@ -90,12 +99,12 @@ SQL options:
 | `:query:`  | string | `_df`   | Python variable name for the SQL result        |
 | `:engine:` | string | none    | Python expression naming the marimo SQL engine |
 
-SQL cells read `query` and `engine` when building the generated marimo cell. Invalid
-`query` names fall back to `_df`, matching the plugin's safe default for SQL output.
+`query` and `engine` are SQL-only options. If `query` is missing or is not a valid
+Python identifier, the plugin uses `_df`.
 
 ## Markdown cells
 
-Markdown cells let Markdown syntax join the page-level marimo execution graph.
+Markdown cells join the page-level marimo execution graph:
 
 ````markdown
 ```{marimo} markdown
@@ -105,11 +114,12 @@ The Markdown block executes as a marimo Markdown cell.
 ```
 ````
 
-Use ordinary MyST outside marimo cells for static content.
+Use ordinary MyST outside marimo cells for static book content.
 
-## Page defaults
+## Page Defaults
 
-Use `{marimo-config}` once per page when cells should share defaults or dependencies:
+Use `{marimo-config}` once per page when cells should share defaults, header code, or
+dependencies:
 
 ````markdown
 ```{marimo-config}
@@ -119,5 +129,4 @@ Use `{marimo-config}` once per page when cells should share defaults or dependen
 ```
 ````
 
-See [Page configuration](configuration.md) for headers, defaults, and page-local
-dependencies.
+Cell options override page defaults. See [Page configuration](configuration.md).

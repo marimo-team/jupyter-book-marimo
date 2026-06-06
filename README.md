@@ -1,18 +1,15 @@
-# jupyter-book-marimo
+# marimo + Jupyter Book
 
-`jupyter-book-marimo` turns MyST-native `{marimo}` directives into hydrated marimo
-islands in a Jupyter Book site.
-
-Authors write Python, SQL, or Markdown cells in normal MyST pages. During the book
-build, the executable plugin runs those cells and emits static HTML. In the browser,
-marimo hydrates the outputs so controls, tables, plots, SQL results, and dependent cells
-stay reactive.
+marimo is a reactive Python notebook that can be embedded in static documents. This repo
+is a Jupyter Book executable plugin that lets you write marimo cells in MyST pages and
+publish a static book whose controls, tables, plots, SQL results, and dependent cells
+still respond in the browser.
 
 Requires Python 3.10+. The package installs marimo for page execution.
 
 ## Quick Start
 
-Install the plugin in the same environment as Jupyter Book:
+**1.** Install the plugin in the same environment as Jupyter Book:
 
 ```bash
 pip install jupyter-book-marimo
@@ -24,7 +21,7 @@ For uv-managed projects, use:
 uv add jupyter-book-marimo
 ```
 
-Register the executable plugin in `myst.yml`:
+**2.** Register the executable plugin in `myst.yml`:
 
 ```yaml
 project:
@@ -36,18 +33,24 @@ project:
 Use the executable path that matches your environment. In this repo's docs site, the
 docs live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`.
 
-Write marimo cells as MyST directives:
+**3.** Edit a MyST page:
 
 ````markdown
+---
+title: My reactive page
+---
+
+# A reactive page
+
 ```{marimo} python
 import marimo as mo
 
-slider = mo.ui.slider(start=1, stop=10, label="islands")
+slider = mo.ui.slider(start=1, stop=10, step=1, label="items")
 slider
 ```
 
 ```{marimo} python
-"🏝️" * slider.value
+mo.md(f"The slider is set to **{slider.value}**.")
 ```
 ````
 
@@ -62,11 +65,20 @@ Set page defaults or page-local dependencies with `{marimo-config}`:
 ```
 ````
 
-Build the book:
+**4.** Build the book:
 
 ```bash
 jupyter-book build --html
 ```
+
+## Features
+
+`jupyter-book-marimo` uses
+[marimo islands](https://docs.marimo.io/guides/exporting/#islands-in-action) so reactive
+notebook content can live between ordinary book sections. The plugin supports Python,
+SQL, and Markdown cells, page-level execution defaults, page-local dependencies, custom
+styling hooks, and static HTML output that hydrates into interactive marimo components
+on load.
 
 ## Docs
 

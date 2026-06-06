@@ -22,10 +22,13 @@ confirm() {
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/release.sh <minor|patch>
+Usage: ./scripts/release.sh <minor|patch|X.Y.Z>
 
-Creates a release commit and semver tag. Pushing the tag publishes the package
-to PyPI through GitHub Actions and Trusted Publishing.
+Creates a release commit and final semver tag. Use an explicit X.Y.Z target for
+the first release, major releases, or any release from a prerelease version.
+Use patch or minor only when the current version is already a final X.Y.Z version.
+Pushing the tag publishes the package to PyPI through GitHub Actions and Trusted
+Publishing.
 EOF
 }
 
@@ -51,6 +54,7 @@ bump_version() {
 
   if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
     print_error "Unsupported version format: $version"
+    print_error "Pass an explicit final X.Y.Z target when releasing from a prerelease"
     exit 1
   fi
 
@@ -69,6 +73,75 @@ bump_version() {
       print_error "Invalid version bump: $bump"
       usage
       exit 1
+      ;;
+  esac
+}
+
+require_newer_explicit_target() {
+  local current="$1"
+  local target="$2"
+
+  if [[ ! "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
+    print_error "Unsupported current version format: $current"
+    exit 1
+  fi
+
+  local current_major="${BASH_REMATCH[1]}"
+  local current_minor="${BASH_REMATCH[2]}"
+  local current_patch="${BASH_REMATCH[3]}"
+  local current_suffix="${BASH_REMATCH[4]}"
+
+  if [[ ! "$target" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    print_error "Invalid version target: $target"
+    usage
+    exit 1
+  fi
+
+  local target_major="${BASH_REMATCH[1]}"
+  local target_minor="${BASH_REMATCH[2]}"
+  local target_patch="${BASH_REMATCH[3]}"
+
+  if ((target_major > current_major)); then
+    return
+  fi
+  if ((target_major == current_major && target_minor > current_minor)); then
+    return
+  fi
+  if ((
+    target_major == current_major
+    && target_minor == current_minor
+    && target_patch > current_patch
+  )); then
+    return
+  fi
+  if ((
+    target_major == current_major
+    && target_minor == current_minor
+    && target_patch == current_patch
+  )) && [[ -n "$current_suffix" ]]; then
+    return
+  fi
+
+  print_error "Version target must be greater than current version: $target <= $current"
+  exit 1
+}
+
+target_version() {
+  local version="$1"
+  local request="$2"
+
+  case "$request" in
+    minor | patch)
+      bump_version "$version" "$request"
+      ;;
+    *)
+      if [[ ! "$request" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_error "Invalid version target: $request"
+        usage
+        exit 1
+      fi
+      require_newer_explicit_target "$version" "$request"
+      printf '%s\n' "$request"
       ;;
   esac
 }
@@ -95,12 +168,7 @@ if [[ -z "${1:-}" ]]; then
   exit 1
 fi
 
-BUMP="$1"
-if [[ ! "$BUMP" =~ ^(minor|patch)$ ]]; then
-  print_error "Invalid version bump: $BUMP"
-  usage
-  exit 1
-fi
+VERSION_REQUEST="$1"
 
 require_command git
 require_command make
@@ -125,7 +193,12 @@ git fetch origin main --tags
 git pull --ff-only origin main
 
 CURRENT_VERSION="$(current_version)"
-NEW_VERSION="$(bump_version "$CURRENT_VERSION" "$BUMP")"
+NEW_VERSION="$(target_version "$CURRENT_VERSION" "$VERSION_REQUEST")"
+
+if [[ "$NEW_VERSION" == "$CURRENT_VERSION" ]]; then
+  print_error "New version matches current version: $NEW_VERSION"
+  exit 1
+fi
 
 if git rev-parse -q --verify "refs/tags/$NEW_VERSION" >/dev/null; then
   print_error "Tag already exists: $NEW_VERSION"
@@ -136,6 +209,7 @@ cat <<EOF
 Release summary:
   Current version: $CURRENT_VERSION
   New version:     $NEW_VERSION
+  Request:         $VERSION_REQUEST
   Commit:          release: $NEW_VERSION
   Tag:             $NEW_VERSION
   Checks:          make check

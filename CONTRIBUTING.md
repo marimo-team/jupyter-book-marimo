@@ -59,11 +59,13 @@ uv run pytest tests/test_extract.py::test_reactive_islands_use_browser_cell_inde
 make book-build
 ```
 
-For subpath deployments, set `BASE_URL` before building:
+For subpath deployments, set `BASE_URL` to the public path before building:
 
 ```bash
-BASE_URL=/projects/marimo/jupyter-book-marimo/docs make book-build
+BASE_URL=/your/deployment/path make book-build
 ```
+
+The GitHub Pages workflow uses `BASE_URL=/jupyter-book-marimo`.
 
 The docs in `docs/` are the application surface for this plugin. Keep them small and
 exercise the real Jupyter Book executable plugin path.
@@ -121,13 +123,16 @@ mode, and click through the tutorial pages.
 
 ## Releases
 
-Releases are cut from a clean `main` branch with `./scripts/release.sh patch` or
-`./scripts/release.sh minor`. The script bumps `pyproject.toml`, refreshes `uv.lock`,
-runs `make check`, commits the version, and creates a semver tag.
+Releases are cut from a clean `main` branch with an explicit final version such as
+`./scripts/release.sh 0.1.0`, or with `./scripts/release.sh patch` or
+`./scripts/release.sh minor` after the package is on a final version. The script bumps
+`pyproject.toml`, refreshes `uv.lock`, runs `make check`, commits the version, and
+creates a semver tag. See `releasing.md` for the full release gate and workflow.
 
 Pushing the tag starts `.github/workflows/publish.yml`. The workflow builds the package,
-uploads `dist/`, publishes with `uv publish`, and creates GitHub release notes. PyPI
-Trusted Publishing is configured for the `pypi` GitHub environment.
+uploads `dist`, publishes with `uv publish --trusted-publishing always`, and creates
+GitHub release notes. PyPI Trusted Publishing is configured for the `pypi` GitHub
+environment.
 
 ## Submitting a Pull Request
 
