@@ -112,10 +112,14 @@ In contrast, Jupyter notebooks implicitly assume a top-to-bottom execution order
 marimo disallows variable re-assignment. Here is something commonly done in Jupyter notebooks that cannot be done in marimo:
 
 ```{marimo} python
+:editor: true
+
 df = 0
 ```
 
 ```{marimo} python
+:editor: true
+
 df = 1
 ```
 

@@ -10,7 +10,9 @@ title: SQL
   dependencies = [
       "duckdb==1.2.2",
       "marimo",
+      "matplotlib",
       "pandas==2.2.3",
+      "plotly",
       "polars==1.27.1",
       "pyarrow==19.0.1",
       "sqlglot==26.13.0",

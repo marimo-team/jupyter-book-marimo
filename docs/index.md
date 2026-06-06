@@ -32,10 +32,10 @@ mo.md(
     This Markdown came from a Python cell. Change the slider and the output changes
     in place.
     """
-).callout("info")
+)
 ```
 
-## What is going on?
+## How it works
 
 Jupyter Book gives you MyST, navigation, cross-references, and static publishing. marimo
 gives you reactive Python, SQL, and Markdown cells. This
