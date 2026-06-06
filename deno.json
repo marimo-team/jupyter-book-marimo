@@ -1,0 +1,16 @@
+{
+  "lock": "deno.lock",
+  "imports": {
+    "linkedom": "npm:linkedom@0.18.12",
+    "lz-string": "npm:lz-string@1.5.0"
+  },
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "strict": true
+  },
+  "fmt": {
+    "indentWidth": 2,
+    "lineWidth": 88,
+    "semiColons": true
+  }
+}

@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/SchemaStore/schemastore/refs/heads/master/src/schemas/json/github-issue-forms.json
+name: "🐞 Bug report"
+description: Report an issue with jupyter-book-marimo
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for filing a bug report.
+
+        A small `myst.yml` plus one Markdown page is the fastest way for us to reproduce plugin issues.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: What went wrong? Include any error messages or stack traces.
+      placeholder: |
+        Running `jupyter-book build --html` fails with:
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal book to reproduce
+      description: The smallest `myst.yml` and `.md` page that trigger the bug.
+      placeholder: |
+        ```yaml
+        project:
+          plugins:
+            - type: executable
+              path: .venv/bin/jupyter-book-marimo
+        ```
+
+        ````markdown
+        # Repro
+
+        ```{marimo} python
+        import marimo as mo
+
+        mo.md("repro")
+        ```
+        ````
+    validations:
+      required: false
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      value: |
+        - **jupyter-book version** (`jupyter-book --version`):
+        - **marimo version** (`marimo --version`):
+        - **jupyter-book-marimo version**:
+        - **Python version** (`python --version`):
+        - **OS**:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: will-submit-pr
+    attributes:
+      label: Will you submit a PR?
+      options:
+        - label: "Yes, I'd like to fix this"

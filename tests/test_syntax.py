@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+import pytest
+
+from jupyter_book_marimo.authoring import (
+    cell_from_directive,
+    config_from_directive,
+)
+
+
+def directive(
+    arg: str = "python",
+    body: str = "x = 1",
+    options: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        "name": "marimo",
+        "arg": arg,
+        "body": body,
+        "options": options or {},
+        "node": {"position": {"start": {"line": 3}}},
+    }
+
+
+def test_marimo_directive_accepts_supported_languages() -> None:
+    assert cell_from_directive(directive("python")).options["language"] == "python"
+    assert cell_from_directive(directive("sql")).options["language"] == "sql"
+    assert cell_from_directive(directive("markdown")).options["language"] == "markdown"
+
+
+def test_marimo_directive_normalizes_canonical_kebab_case_options() -> None:
+    cell = cell_from_directive(
+        directive(
+            "sql",
+            "select 1",
+            {
+                "query": "rows",
+                "hide-output": True,
+                "hide-code": True,
+                "server-output": False,
+                "column": 2,
+            },
+        )
+    )
+
+    assert cell.options == {
+        "language": "sql",
+        "query": "rows",
+        "hide_output": True,
+        "hide_code": True,
+        "server_output": False,
+        "column": 2,
+    }
+
+
+def test_marimo_directive_requires_known_language() -> None:
+    with pytest.raises(ValueError, match="marimo language must be one of"):
+        cell_from_directive(directive("py"))
+
+
+def test_marimo_directive_rejects_unknown_option() -> None:
+    with pytest.raises(ValueError, match="Unsupported marimo option"):
+        cell_from_directive(directive(options={"hide_code": True}))
+
+
+def test_marimo_directive_rejects_sql_options_on_python() -> None:
+    with pytest.raises(ValueError, match="SQL-only"):
+        cell_from_directive(directive("python", options={"query": "rows"}))
+
+
+def test_marimo_directive_rejects_conflicting_options() -> None:
+    with pytest.raises(ValueError, match="Conflicting"):
+        cell_from_directive(directive(options={"echo": True, "hide-code": True}))
+
+
+def test_marimo_config_directive_uses_canonical_options() -> None:
+    config = config_from_directive(
+        {
+            "name": "marimo-config",
+            "options": {
+                "eval": False,
+                "server-output": False,
+                "external-env": True,
+                "header": "import marimo as mo",
+                "molab": False,
+            },
+        }
+    )
+
+    assert config == {
+        "eval": False,
+        "server_output": False,
+        "external_env": True,
+        "header": "import marimo as mo",
+        "molab": False,
+    }
+
+
+def test_marimo_config_accepts_native_pyproject_block_option() -> None:
+    config = config_from_directive(
+        {
+            "name": "marimo-config",
+            "options": {"pyproject": ""},
+            "body": 'requires-python = ">=3.12"\ndependencies = ["pandas"]\n',
+        }
+    )
+
+    assert config == {
+        "pyproject": 'requires-python = ">=3.12"\ndependencies = ["pandas"]\n'
+    }
+
+
+def test_marimo_config_rejects_pyproject_with_external_env() -> None:
+    with pytest.raises(ValueError, match="external-env and pyproject"):
+        config_from_directive(
+            {
+                "name": "marimo-config",
+                "options": {
+                    "external-env": True,
+                    "pyproject": 'dependencies = ["pandas"]',
+                },
+            }
+        )
