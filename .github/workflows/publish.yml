@@ -5,8 +5,7 @@ on:
     tags:
       - "[0-9]*.[0-9]*.[0-9]*"
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build:
@@ -33,6 +32,8 @@ jobs:
           path: dist/
           retention-days: 1
           if-no-files-found: error
+    permissions:
+      contents: read
 
   publish:
     needs: build
