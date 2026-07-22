@@ -1,0 +1,44 @@
+name: autofix.ci # needed to securely identify the workflow
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      # Toolchain (mirrors ci.yml lint job); ruff + deno come from the uv dev group
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install "$(cat .python-version)"
+
+      # Fixers: mutating variants of `make lint`, each `|| true`
+      - name: Ruff format
+        run: uv run ruff format src tests scripts || true
+
+      - name: Ruff check
+        run: uv run ruff check --fix src tests scripts || true
+
+      - name: Deno fmt
+        run: uv run deno fmt deno.json widget docs/api docs/styles README.md CONTRIBUTING.md releasing.md .github/*.md docs/*.md docs/*.yml || true
+
+      - name: Deno lint
+        run: uv run deno lint --fix widget || true
+
+      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
