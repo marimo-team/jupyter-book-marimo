@@ -106,7 +106,9 @@ project:
 
 Use the executable path for your book environment. When `myst.yml` lives in `docs/` and
 the virtual environment lives at the repository root, use
-`../.venv/bin/jupyter-book-marimo`.
+`../.venv/bin/jupyter-book-marimo`. On Windows, use
+`.venv/Scripts/jupyter-book-marimo.exe`, or `../.venv/Scripts/jupyter-book-marimo.exe`
+for the same nested layout.
 
 Then write cells in any MyST page:
 

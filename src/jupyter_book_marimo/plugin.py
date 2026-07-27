@@ -184,9 +184,9 @@ def source_identity(path: Path | None, cells: list[Cell]) -> str:
     if path is None:
         return synthetic_filename(cells)
     try:
-        return str(path.relative_to(book_source_root(path)))
+        return path.relative_to(book_source_root(path)).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def source_text(path: Path | None) -> str:
@@ -230,6 +230,17 @@ def is_file_stylesheet(value: str) -> bool:
     return value.startswith("file://")
 
 
+def file_stylesheet_path(stylesheet: str) -> Path:
+    parsed = urlparse(stylesheet)
+    path = unquote(parsed.path)
+    if os.name == "nt":
+        if parsed.netloc and parsed.netloc.lower() != "localhost":
+            path = f"//{parsed.netloc}{path}"
+        elif len(path) >= 3 and path[0] == "/" and path[2] == ":":
+            path = path[1:]
+    return Path(path).expanduser()
+
+
 def embedded_style_block(source: Path) -> dict[str, str]:
     if not source.is_file():
         raise ValueError(f"Custom stylesheet is not a file: {source}")
@@ -252,7 +263,7 @@ def custom_style_asset(stylesheet: str) -> tuple[str | None, dict[str, str] | No
     if is_external_stylesheet(stylesheet):
         return stylesheet, None
     if is_file_stylesheet(stylesheet):
-        source = Path(unquote(urlparse(stylesheet).path)).expanduser()
+        source = file_stylesheet_path(stylesheet)
         if not source.exists():
             raise FileNotFoundError(f"Custom stylesheet not found: {stylesheet}")
         return None, embedded_style_block(source)

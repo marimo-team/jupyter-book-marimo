@@ -44,6 +44,61 @@ jobs:
           UV_PYTHON: ${{ matrix.python-version }}
         run: uv run pytest tests
 
+  windows-test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        shell: pwsh
+        run: uv python install (Get-Content .python-version)
+
+      - name: Run Python tests
+        run: uv run pytest tests
+
+      - name: Build a book with the Windows plugin executable
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          New-Item -ItemType Directory -Path .windows-smoke
+          @'
+          version: 1
+          project:
+            title: Windows smoke test
+            plugins:
+              - type: executable
+                path: ../.venv/Scripts/jupyter-book-marimo.exe
+          site:
+            template: book-theme
+          '@ | Set-Content .windows-smoke/myst.yml
+          @'
+          # Windows smoke test
+
+          ```{marimo} python
+          import marimo as mo
+
+          slider = mo.ui.slider(start=1, stop=10, label="islands")
+          slider
+          ```
+
+          ```{marimo} python
+          mo.md(f"The slider is set to **{slider.value}**.")
+          ```
+          '@ | Set-Content .windows-smoke/README.md
+
+          $jupyterBook = Join-Path $PWD ".venv/Scripts/jupyter-book.exe"
+          Push-Location .windows-smoke
+          & $jupyterBook build --html --strict
+          $exitCode = $LASTEXITCODE
+          Pop-Location
+          exit $exitCode
+
   widget:
     runs-on: ubuntu-latest
     steps:
