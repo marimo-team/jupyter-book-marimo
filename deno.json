@@ -1,7 +1,7 @@
 {
   "lock": "deno.lock",
   "imports": {
-    "linkedom": "npm:linkedom@0.18.12",
+    "linkedom": "npm:linkedom@0.18.13",
     "lz-string": "npm:lz-string@1.5.0"
   },
   "compilerOptions": {
