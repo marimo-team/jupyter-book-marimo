@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-book-marimo"
-version = "0.0.1"
+version = "0.0.2"
 description = "Render marimo cells as hydrated islands in Jupyter Book."
 readme = "README.md"
 license = "Apache-2.0"
