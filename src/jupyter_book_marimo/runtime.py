@@ -243,6 +243,13 @@ async def extract(payload: dict[str, Any]) -> dict[str, Any]:
     return await real_extract(payload)
 
 
+def initialize_marimo_asyncio() -> None:
+    """Install the event-loop policy required by marimo sessions."""
+    from marimo._utils.asyncio_utils import initialize_asyncio
+
+    initialize_asyncio()
+
+
 def source_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
@@ -384,6 +391,7 @@ def run_extractor(payload: dict[str, Any]) -> dict[str, Any]:
 
     pyproject = document_options.get("pyproject")
     if not isinstance(pyproject, str) or not pyproject.strip():
+        initialize_marimo_asyncio()
         with redirect_stdout(sys.stderr):
             return asyncio.run(extract(payload))
 

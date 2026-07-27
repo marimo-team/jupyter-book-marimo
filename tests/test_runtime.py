@@ -122,11 +122,19 @@ def test_default_extractor_runs_in_process_and_redirects_stdout(
     monkeypatch,
     capsys,
 ) -> None:
+    initialized = False
+
+    def fake_initialize() -> None:
+        nonlocal initialized
+        initialized = True
+
     async def fake_extract(payload):
+        assert initialized
         assert payload == {"metadata": {}}
         print("cell stdout")
         return {"outputs": []}
 
+    monkeypatch.setattr(runtime, "initialize_marimo_asyncio", fake_initialize)
     monkeypatch.setattr(runtime, "extract", fake_extract)
 
     assert runtime.run_extractor({"metadata": {}}) == {"outputs": []}

@@ -31,7 +31,9 @@ project:
 ```
 
 Use the executable path that matches your environment. In this repo's docs site, the
-docs live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`.
+docs live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`. On Windows, use
+`.venv/Scripts/jupyter-book-marimo.exe`, or `../.venv/Scripts/jupyter-book-marimo.exe`
+when `myst.yml` lives in `docs/`.
 
 **3.** Edit a MyST page:
 

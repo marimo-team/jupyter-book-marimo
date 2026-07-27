@@ -37,6 +37,15 @@ project:
       path: ../.venv/bin/jupyter-book-marimo
 ```
 
+On Windows, use the executable under `Scripts`:
+
+```yaml
+project:
+  plugins:
+    - type: executable
+      path: .venv/Scripts/jupyter-book-marimo.exe
+```
+
 Build the book normally:
 
 ```bash
