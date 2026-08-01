@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from jupyter_book_marimo.plugin import (
     directive_nodes,
     stylesheets_from_env,

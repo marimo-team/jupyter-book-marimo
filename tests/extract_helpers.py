@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import ast
+import asyncio
 import json
+import warnings
 from html.parser import HTMLParser
 from typing import Any
-import warnings
 
 from jupyter_book_marimo import extract
 from jupyter_book_marimo.cell_plan import CellPlan

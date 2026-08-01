@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-from jupyter_book_marimo.molab import (
-    LineRange,
-    molab_source_cells_from_page_source,
-)
 from extract_helpers import (
     assignment_values,
     cell_plan,
     markdown_cell_literals,
     run_extract,
+)
+
+from jupyter_book_marimo.molab import (
+    LineRange,
+    molab_source_cells_from_page_source,
 )
 
 

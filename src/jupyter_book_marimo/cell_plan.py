@@ -7,9 +7,9 @@ and Molab export.
 
 from __future__ import annotations
 
+import keyword
 from dataclasses import dataclass
 from typing import Any
-import keyword
 
 from marimo._convert.common.format import markdown_to_marimo, sql_to_marimo
 

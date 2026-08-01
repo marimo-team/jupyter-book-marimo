@@ -7,11 +7,11 @@ Header errors fail the build.
 
 from __future__ import annotations
 
+import ast
+import re
 from collections.abc import Sequence
 from textwrap import dedent
 from typing import Any
-import ast
-import re
 
 from marimo import MarimoIslandGenerator
 

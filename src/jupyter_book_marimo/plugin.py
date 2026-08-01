@@ -9,24 +9,24 @@ anywidget node.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import hashlib
-from importlib.resources import files
 import json
 import os
+import sys
+from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 from shutil import copyfileobj
-import sys
 from typing import Any
 from urllib.parse import unquote, urlparse
 
 from .authoring import (
-    Cell,
     MARIMO_CELL_NODE,
     MARIMO_CONFIG_NODE,
     MARIMO_CONFIG_OPTION_SPECS,
     MARIMO_DIRECTIVE_OPTION_SPECS,
     SUPPORTED_LANGUAGES,
+    Cell,
     cell_from_directive,
     cell_from_node,
     config_from_directive,
@@ -355,7 +355,7 @@ def output_node(
     if custom_style_blocks:
         model["customStyleBlocks"] = custom_style_blocks
     widget_id_digest = hashlib.sha1(
-        f"{model.get('appId', '')}\0{index}\0{source}".encode("utf-8")
+        f"{model.get('appId', '')}\0{index}\0{source}".encode()
     ).hexdigest()[:12]
     return {
         "type": "anywidget",

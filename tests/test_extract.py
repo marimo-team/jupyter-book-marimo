@@ -3,16 +3,16 @@ from __future__ import annotations
 import ast
 
 import pytest
-
-from jupyter_book_marimo.cell_plan import CellPlan
-from jupyter_book_marimo.island_output import (
-    suppress_mime_renderers,
-)
 from extract_helpers import (
     code_blocks,
     marimo_mime_payloads,
     marimo_mimetypes,
     run_extract,
+)
+
+from jupyter_book_marimo.cell_plan import CellPlan
+from jupyter_book_marimo.island_output import (
+    suppress_mime_renderers,
 )
 
 

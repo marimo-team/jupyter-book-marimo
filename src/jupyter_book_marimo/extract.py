@@ -7,13 +7,13 @@ browser runtime, and attaches one shared hydration payload to the page outputs.
 
 from __future__ import annotations
 
-from contextlib import redirect_stdout
-from dataclasses import dataclass, field
-from collections.abc import Sequence
-from typing import Any, Protocol
 import asyncio
 import json
 import sys
+from collections.abc import Sequence
+from contextlib import redirect_stdout
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 
 from .authoring import as_bool
 from .cell_plan import CellPlan

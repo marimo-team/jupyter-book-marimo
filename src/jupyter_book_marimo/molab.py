@@ -6,11 +6,11 @@ Markdown, converted marimo directives, headers, and page-local script metadata.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from collections import Counter
-from dataclasses import dataclass, field
 import json
 import re
+from collections import Counter
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 from marimo import MarimoIslandGenerator

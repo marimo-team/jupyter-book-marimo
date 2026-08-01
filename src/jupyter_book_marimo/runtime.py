@@ -8,21 +8,21 @@ from __future__ import annotations
 
 import ast
 import asyncio
-from collections.abc import Generator
-from contextlib import contextmanager, redirect_stdout
 import hashlib
-from html.parser import HTMLParser
 import importlib
-from importlib.metadata import distribution
 import json
 import os
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager, redirect_stdout
+from html.parser import HTMLParser
+from importlib.metadata import distribution
 from pathlib import Path
 from textwrap import dedent
-import tempfile
 from typing import Any, TypeGuard
 
 from .authoring import as_bool, pyproject_to_script_metadata
@@ -158,10 +158,10 @@ def storage() -> Any:
     from marimo._session.notebook.storage import FilesystemStorage
 
     class Storage(FilesystemStorage):
-        def write(self, path: Path, content: str) -> None:  # noqa: ARG002
+        def write(self, path: Path, content: str) -> None:
             return None
 
-        def rename(self, old_path: Path, new_path: Path) -> None:  # noqa: ARG002
+        def rename(self, old_path: Path, new_path: Path) -> None:
             return None
 
     return Storage()

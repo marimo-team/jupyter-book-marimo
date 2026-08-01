@@ -6,10 +6,10 @@ visibility, and MIME suppression share one output model shape.
 
 from __future__ import annotations
 
-from html.parser import HTMLParser
-from typing import Any
 import html
 import re
+from html.parser import HTMLParser
+from typing import Any
 
 from .authoring import as_bool
 
