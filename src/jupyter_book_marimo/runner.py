@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
-from contextlib import contextmanager
-from importlib.metadata import distribution
 import json
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager
+from importlib.metadata import distribution
+from pathlib import Path
 
 from .authoring import pyproject_to_script_metadata
 from .protocol import CompiledMarimoPage, MarimoPageRequest
 
-MARIMO_REQUIREMENT = "marimo>=0.23.15"
+MARIMO_REQUIREMENT = "marimo>=0.23.16"
 UV_RUN_TIMEOUT_SECONDS = int(
     os.environ.get("JUPYTER_BOOK_MARIMO_UV_TIMEOUT_SECONDS", "300")
 )

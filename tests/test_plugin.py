@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
-from jupyter_book_marimo.plugin import directive_nodes, transform_document
-
 from helpers import compiled_cell, compiled_page
+
+from jupyter_book_marimo.plugin import directive_nodes, transform_document
 
 
 def test_plugin_command_declares_directives_and_document_transform() -> None:

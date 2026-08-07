@@ -4,9 +4,9 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
-from jupyter_book_marimo.runner import run_page_compiler, run_uv_compiler
-
 from helpers import cell, compiled_cell, compiled_page, request
+
+from jupyter_book_marimo.runner import run_page_compiler, run_uv_compiler
 
 
 def test_current_environment_uses_bounded_compiler_subprocess() -> None:

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -84,7 +84,7 @@ def anywidget_node(
         else str(payload.get("appId") or "")
     )
     digest = hashlib.sha256(
-        f"{app_id}\0{cell.index}\0{cell.html}".encode("utf-8")
+        f"{app_id}\0{cell.index}\0{cell.html}".encode()
     ).hexdigest()[:12]
     return {
         "type": "anywidget",

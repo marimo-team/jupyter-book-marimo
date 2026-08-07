@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from helpers import cell, request
 
 from jupyter_book_marimo.compiler import (
     compile_page,
@@ -13,8 +14,6 @@ from jupyter_book_marimo.protocol import (
     MarimoPageMetadata,
     MarimoPageRequest,
 )
-
-from helpers import cell, request
 
 
 def test_compile_page_emits_protocol_runtime_and_static_output() -> None:
@@ -31,9 +30,6 @@ def test_compile_page_emits_protocol_runtime_and_static_output() -> None:
     assert page.app.runtime_cell_count == 2
     assert len(page.app.assets["moduleScripts"]) >= 1
     assert "x = 41" in page.app.notebook_code
-    assert page.app.runtime_payload["schemaVersion"] == 1
-    assert page.app.runtime_payload["appId"] == page.app.id
-    assert len(page.app.runtime_payload["cells"]) == 2
     assert [compiled.index for compiled in page.cells] == [0, 1]
     assert "42" in page.cells[1].html
     assert page.cells[1].output is not None

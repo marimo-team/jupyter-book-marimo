@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from helpers import cell, compiled_cell, compiled_page, request
 
 from jupyter_book_marimo.protocol import (
     CompiledMarimoPage,
     MarimoPageRequest,
 )
-
-from helpers import cell, compiled_cell, compiled_page, request
 
 
 def test_page_request_round_trips_through_protocol_v2() -> None:

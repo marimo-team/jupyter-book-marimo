@@ -37,8 +37,8 @@ def test_cell_directive_maps_authoring_options_to_page_protocol() -> None:
             options={
                 "query": "rows",
                 "engine": "duckdb",
-                "echo": True,
-                "editor": False,
+                "echo": False,
+                "editor": True,
                 "output": True,
                 "server-output": False,
                 "error": False,
@@ -55,7 +55,7 @@ def test_cell_directive_maps_authoring_options_to_page_protocol() -> None:
         "language": "sql",
         "render": {
             "source": True,
-            "editor": False,
+            "editor": True,
             "output": True,
             "serverOutput": False,
             "error": False,
@@ -77,7 +77,15 @@ def test_cell_directive_maps_authoring_options_to_page_protocol() -> None:
 
 def test_hide_options_map_to_render_visibility() -> None:
     cell = cell_from_directive(
-        directive(options={"hide-code": True, "hide-output": True})
+        directive(
+            options={
+                "echo": True,
+                "editor": True,
+                "output": True,
+                "hide-code": True,
+                "hide-output": True,
+            }
+        )
     )
 
     assert cell.options["render"] == {
@@ -109,17 +117,15 @@ def test_disabled_cells_report_execution_as_disabled() -> None:
     assert cell.options["execution"] == {"enabled": False}
 
 
-@pytest.mark.parametrize("language", ["python", "markdown"])
-def test_sql_options_require_sql(language: str) -> None:
-    with pytest.raises(ValueError, match="SQL-only"):
-        cell_from_directive(directive(language, options={"query": "rows"}))
+def test_sql_options_are_omitted_from_python_cells() -> None:
+    cell = cell_from_directive(directive("python", options={"query": "rows"}))
+
+    assert "sql" not in cell.options
 
 
-def test_directive_rejects_unknown_and_conflicting_options() -> None:
+def test_directive_rejects_unknown_options() -> None:
     with pytest.raises(ValueError, match="Unsupported marimo option"):
         cell_from_directive(directive(options={"hide_code": True}))
-    with pytest.raises(ValueError, match="Conflicting marimo options"):
-        cell_from_directive(directive(options={"echo": True, "hide-code": True}))
 
 
 def test_config_directive_maps_page_defaults_and_environment() -> None:

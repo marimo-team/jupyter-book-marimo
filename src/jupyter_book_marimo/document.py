@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from .authoring import (
-    Cell,
     MARIMO_CONFIG_NODE,
+    Cell,
     PageConfig,
     cell_from_node,
     config_from_node,
@@ -110,17 +110,7 @@ def setup_cell_requests(config: PageConfig) -> tuple[MarimoCellRequest, ...]:
         MarimoCellRequest(
             index=0,
             source=config.header,
-            options={
-                "language": "python",
-                "render": {
-                    "source": False,
-                    "output": False,
-                    "include": False,
-                    "editor": False,
-                    "error": False,
-                    "serverOutput": False,
-                },
-            },
+            options={"language": "python"},
         ),
     )
 

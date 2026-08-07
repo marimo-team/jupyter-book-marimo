@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from helpers import compiled_cell, compiled_page
 
 from jupyter_book_marimo.document import CollectedDocument, collect_document
 from jupyter_book_marimo.projection import project_page
-
-from helpers import compiled_cell, compiled_page
 
 
 def collected_document() -> CollectedDocument:

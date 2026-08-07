@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Software Development :: Documentation",
 ]
 dependencies = [
-    "marimo>=0.23.15",
+    "marimo>=0.23.16",
     "uv",
 ]
 
@@ -36,7 +36,7 @@ dev = [
     "hatchling>=1.27",
     "jupyter-book>=2.1",
     "pytest>=9",
-    "ruff>=0.15",
+    "ruff>=0.16",
     "ty>=0.0.39",
 ]
 
@@ -68,3 +68,6 @@ path = "scripts/hatch_build.py"
 [tool.uv]
 exclude-newer = "7 days"
 exclude-newer-package = { marimo = false }
+
+[tool.ruff.lint.per-file-ignores]
+"src/jupyter_book_marimo/compiler.py" = ["SIM102"]

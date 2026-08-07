@@ -47,12 +47,6 @@ MARIMO_CONFIG_OPTION_SPECS = {
 
 CELL_OPTION_KEYS = set(MARIMO_DIRECTIVE_OPTION_SPECS)
 CONFIG_OPTION_KEYS = set(MARIMO_CONFIG_OPTION_SPECS)
-SQL_OPTION_KEYS = {"query", "engine"}
-CONFLICTING_OPTIONS = (
-    ("echo", "hide-code"),
-    ("output", "hide-output"),
-    ("eval", "disabled"),
-)
 
 
 @dataclass(frozen=True)
@@ -130,13 +124,6 @@ def cell_from_directive(data: dict[str, Any]) -> Cell:
 
     options = directive_options(data)
     reject_unknown_options(options, CELL_OPTION_KEYS, directive="marimo")
-    reject_conflicts(options)
-    if language != "sql":
-        illegal = sorted(SQL_OPTION_KEYS & set(options))
-        if illegal:
-            raise ValueError(
-                f"SQL-only marimo option(s) on {language} cell: {', '.join(illegal)}"
-            )
 
     return Cell(
         source=str(data.get("body") or ""),
@@ -150,7 +137,6 @@ def config_from_directive(data: dict[str, Any]) -> PageConfig:
     if options.get("pyproject") == "":
         options = {**options, "pyproject": str(data.get("body") or "")}
     reject_unknown_options(options, CONFIG_OPTION_KEYS, directive="marimo-config")
-    reject_conflicts(options)
 
     external_env = as_bool(options.get("external-env"))
     pyproject = str(options.get("pyproject") or "")
@@ -232,6 +218,8 @@ def execution_options_patch(options: dict[str, Any]) -> JsonObject:
     for source, target in render_keys.items():
         if source in options:
             render[target] = as_bool(options[source])
+    if as_bool(render.get("editor")):
+        render["source"] = True
 
     if as_bool(options.get("hide-code")):
         render["source"] = False
@@ -252,7 +240,7 @@ def execution_options_patch(options: dict[str, Any]) -> JsonObject:
 def directive_options(data: dict[str, Any]) -> dict[str, Any]:
     options = data.get("options") or {}
     if not isinstance(options, dict):
-        raise ValueError("Directive options must be a mapping")
+        raise TypeError("Directive options must be a mapping")
     return dict(options)
 
 
@@ -286,9 +274,3 @@ def reject_unknown_options(
     unknown = sorted(set(options) - allowed)
     if unknown:
         raise ValueError(f"Unsupported {directive} option(s): {', '.join(unknown)}")
-
-
-def reject_conflicts(options: dict[str, Any]) -> None:
-    for first, second in CONFLICTING_OPTIONS:
-        if as_bool(options.get(first)) and as_bool(options.get(second)):
-            raise ValueError(f"Conflicting marimo options: {first} and {second}")
