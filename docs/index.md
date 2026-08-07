@@ -1,11 +1,14 @@
 ---
-title: 🟢 🟠 marimo + Jupyter Book
+title: Make Jupyter Book pages reactive with marimo.
 ---
 
-Static book. Interactive cells.
+[Jupyter Book](https://jupyterbook.org/) builds books and documentation sites from MyST
+Markdown and notebooks. `jupyter-book-marimo` adds reactive Python, SQL, and Markdown
+cells to its MyST pages.
 
-`jupyter-book-marimo` lets you write marimo cells in ordinary MyST pages, build your
-Jupyter Book as static HTML, and keep the outputs interactive in the browser.
+The plugin compiles every `{marimo}` directive on a page into one marimo app. Jupyter
+Book publishes the authored content and initial cell output as static HTML, then
+hydrates the app in the browser.
 
 Move the slider. The page has already been built, served, and loaded as static HTML. The
 Markdown below still updates because marimo hydrates the cells after the page loads.
@@ -37,11 +40,11 @@ mo.md(
 
 ## How it works
 
-Jupyter Book gives you MyST, navigation, cross-references, and static publishing. marimo
-gives you reactive Python, SQL, and Markdown cells. This
-[plugin](https://mystmd.org/guide/executable-plugins) connects them: it executes
-`{marimo}` directives during the book build, writes static HTML output, and loads the
-marimo island runtime so dependent cells can react in the reader's browser.
+The [executable plugin](https://mystmd.org/guide/executable-plugins) collects every
+`{marimo}` directive before the page compiles. Jupyter Book keeps MyST navigation,
+cross-references, and layout around each projected cell. A shared browser runtime
+restores marimo dataflow after the static page loads, so dependencies can cross ordinary
+MyST sections.
 
 ## Quickstart
 
@@ -139,9 +142,9 @@ them to see larger examples with UI, data flow, SQL, layouts, Markdown, and plot
 - [Getting started](api/install.md): install the package and register the executable
   plugin.
 - [Authoring cells](api/authoring.md): write Python, SQL, and Markdown cells.
-- [Page configuration](api/configuration.md): set defaults, headers, Molab export, and
-  page-local dependencies.
-- [Styling hooks](api/styling.md): map book theme variables into marimo output.
+- [Page configuration](api/configuration.md): set defaults, header code, and page-local
+  dependencies.
+- [Styling](api/styling.md): map book theme variables into marimo output.
 - [Runtime assets](api/runtime-assets.md): understand the anywidget bridge and marimo
-  hydration payload.
+  page lifecycle.
 - [Tutorials](tutorials/index.md): read marimo examples rendered through the plugin.
