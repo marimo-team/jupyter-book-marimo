@@ -11,7 +11,6 @@ from __future__ import annotations
 import ast
 import asyncio
 import hashlib
-import html
 import json
 import keyword
 import re
@@ -73,24 +72,6 @@ class HeadAssetParser(HTMLParser):
             self.head_tags.append({"tag": tag, "attrs": values})
 
 
-class MimeParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.mimetypes: list[str] = []
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-    ) -> None:
-        if tag != "marimo-mime-renderer":
-            return
-        values = {key: value or "" for key, value in attrs}
-        value = html.unescape(values.get("data-mime", "")).strip().strip("\"'")
-        if value:
-            self.mimetypes.append(value)
-
-
 @dataclass
 class PlannedCell:
     index: int
@@ -102,13 +83,11 @@ class PlannedCell:
     display_editor: bool
     display_output: bool
     display_server_output: bool
-    setup: bool
     start_line: int | None
 
 
 @dataclass
 class PageRequest:
-    identity: str
     filename: str
     app_id: str
     pyproject: str | None
@@ -208,6 +187,8 @@ def plan_cell(
     marimo_options = as_dict(options.get("marimo"))
     cell_render = as_dict(cell_options.get("render"))
     default_render = as_dict(defaults.get("render"))
+    if as_bool(render.get("editor")):
+        render["source"] = True
     if (
         not setup
         and as_bool(marimo_options.get("unparsable"))
@@ -236,7 +217,6 @@ def plan_cell(
         display_editor=display_editor,
         display_output=display_output,
         display_server_output=display_server_output,
-        setup=setup,
         start_line=(
             int(cell["startLine"])
             if isinstance(cell.get("startLine"), int)
@@ -272,7 +252,6 @@ def page_request(payload: dict[str, Any]) -> PageRequest:
     ]
     executable_setup_cells = [cell for cell in explicit_setup_cells if cell.execute]
     return PageRequest(
-        identity=identity,
         filename=filename,
         app_id="marimo-" + page_digest(identity),
         pyproject=pyproject,
@@ -292,7 +271,7 @@ def generated_setup_cells(
     setup_cells: list[PlannedCell],
     authored_cells: list[PlannedCell],
 ) -> list[PlannedCell]:
-    setup_sources = [cell.code for cell in setup_cells]
+    setup_sources = [cell.executable_source for cell in setup_cells]
     generated_cells = [
         cell
         for cell in authored_cells
@@ -609,9 +588,8 @@ def render_stub(
 
 
 def has_error_output(stub: Any) -> bool:
-    parser = MimeParser()
-    parser.feed(render_stub(stub, display_code=False, display_output=True))
-    return any(mimetype in ERROR_MIMETYPES for mimetype in parser.mimetypes)
+    output = stub.output
+    return output is not None and str(output.mimetype) in ERROR_MIMETYPES
 
 
 def error_location(request: PageRequest, plan: PlannedCell) -> str:
@@ -655,13 +633,18 @@ def source_with_private_marimo_alias(source: str, name: str) -> str:
     alias = f"_{name}"
     while alias in names:
         alias = f"_{alias}"
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and node.id == name
-        ):
-            node.id = alias
+    statement = tree.body[0]
+    expression = (
+        statement.value if isinstance(statement, (ast.Assign, ast.Expr)) else None
+    )
+    if (
+        isinstance(expression, ast.Call)
+        and isinstance(expression.func, ast.Attribute)
+        and expression.func.attr in {"md", "sql"}
+        and isinstance(expression.func.value, ast.Name)
+        and expression.func.value.id == name
+    ):
+        expression.func.value.id = alias
     return f"import marimo as {alias}\n{ast.unparse(tree)}"
 
 
@@ -712,17 +695,15 @@ async def compile_page(
         version_override=version_override,
     )
     authored_stubs = stubs[len(request.setup_cells) :]
+    app = {
+        "id": request.app_id,
+        "runtimeCellCount": len(runtime_cells),
+        "assets": assets,
+        "notebookCode": browser_notebook_code(notebook, request.pyproject),
+    }
     return {
         "protocolVersion": PAGE_PROTOCOL_VERSION,
-        "app": {
-            "id": request.app_id,
-            "runtimeCellCount": len(runtime_cells),
-            "assets": assets,
-            "notebookCode": browser_notebook_code(notebook, request.pyproject),
-            "runtimePayload": generator.render_payload(),
-        }
-        if runtime_cells
-        else None,
+        "app": app if runtime_cells else None,
         "cells": outputs_from_stubs(request, request.cells, authored_stubs),
         "diagnostics": [],
     }

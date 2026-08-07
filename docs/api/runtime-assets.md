@@ -55,11 +55,11 @@ Executed source is part of the runtime payload even when `:echo: false`.
 
 ## Published files
 
-The Python package contains:
+The wheel contains:
 
 ```text
-src/jupyter_book_marimo/assets/container-widget.mjs
-src/jupyter_book_marimo/assets/islands-bridge.css
+jupyter_book_marimo/assets/container-widget.mjs
+jupyter_book_marimo/assets/islands-bridge.css
 ```
 
 During the document transform, both files are copied into:

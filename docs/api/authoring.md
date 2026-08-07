@@ -53,12 +53,8 @@ mo.md("show source and output")
 | `:name:`          | string  | none    | Set the marimo cell name                                           |
 | `:column:`        | number  | none    | Set the marimo column index                                        |
 
-Unsupported options fail the build before execution. The plugin also rejects a single
-directive that explicitly sets both sides of these option pairs:
-
-- `:echo: true` and `:hide-code: true`
-- `:output: true` and `:hide-output: true`
-- `:eval: true` and `:disabled: true`
+Unknown options fail the build before execution. `hide-code` overrides `echo` and
+`editor`. `hide-output` overrides `output`. `disabled` and `unparsable` override `eval`.
 
 Visibility options are presentational. Executed cells are serialized into the static
 page so marimo can hydrate islands in the browser. Do not put credentials, private

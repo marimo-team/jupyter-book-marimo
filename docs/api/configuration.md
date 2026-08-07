@@ -58,7 +58,7 @@ Set `pyproject` to PEP 723-compatible TOML:
 ```
 ````
 
-The plugin runs that page with uv and `marimo>=0.23.15`. Dependency resolution changes
+The plugin runs that page with uv and `marimo>=0.23.16`. Dependency resolution changes
 the Python environment. It does not restrict filesystem, process, or network access.
 
 Use `:external-env: true` when the page imports packages already installed beside

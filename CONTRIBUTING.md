@@ -1,147 +1,92 @@
 # Contributing to jupyter-book-marimo
 
-Work from the repository root. `uv` installs the package, the development tools, Jupyter
-Book, and the Deno runtime used by the widget project.
+Work from the repository root. The Deno import map pins the published
+`@marimo-team/mdx-marimo` package used for browser bridge imports and generated styles.
 
-## Prerequisites
-
-| Tool                             | Purpose                                         |
-| -------------------------------- | ----------------------------------------------- |
-| [uv](https://docs.astral.sh/uv/) | Manages Python, dependencies, tests, and builds |
-| Python 3.10+                     | Required by the package                         |
-
-Install dependencies from the repo root:
+Install the Python environment:
 
 ```bash
 uv python install "$(cat .python-version)"
 uv sync --dev
 ```
 
-`uv` creates and maintains `.venv/`.
+The development environment includes the Deno runtime used for TypeScript checks, tests,
+and browser bundles.
 
-## Development Workflow
+## Commands
 
-### Make targets
+| Command             | Contract                                                      |
+| ------------------- | ------------------------------------------------------------- |
+| `make format`       | Format Python, TypeScript, Markdown, YAML, and JSON           |
+| `make lint`         | Check formatting, lint, and static types                      |
+| `make test`         | Run Python protocol tests and browser-adapter tests           |
+| `make widget-build` | Bundle local browser assets for tests and documentation       |
+| `make build`        | Build the wheel and source distribution                       |
+| `make book-build`   | Build the documentation as strict static HTML                 |
+| `make book-start`   | Serve the documentation on `http://localhost:3102`            |
+| `make check`        | Run lint, tests, package builds, and the strict documentation |
 
-| Command             | What it does                                                |
-| ------------------- | ----------------------------------------------------------- |
-| `make format`       | Format Python, widget TypeScript, and maintained Markdown   |
-| `make lint`         | Check formatting, lint Python and TypeScript, and typecheck |
-| `make test`         | Run Python and widget tests                                 |
-| `make build`        | Regenerate the widget bundle and build wheel and sdist      |
-| `make book-build`   | Build docs as strict static HTML                            |
-| `make check`        | Run lint, tests, build, and strict docs build               |
-| `make widget-build` | Regenerate only the packaged widget bundle                  |
-| `make book-start`   | Serve docs locally                                          |
-| `make clean`        | Delete build artifacts                                      |
-
-### Linting and formatting
+Run one Python test with:
 
 ```bash
-make lint
-
-# Auto-format
-make format
+uv run pytest tests/test_compiler.py::test_compile_page_emits_protocol_runtime_and_static_output
 ```
 
-### Running tests
-
-```bash
-make test
-
-# Run a single test
-uv run pytest tests/test_extract.py::test_reactive_islands_use_browser_cell_indexes
-```
-
-### Building docs
-
-```bash
-make book-build
-```
-
-For subpath deployments, set `BASE_URL` to the public path before building:
-
-```bash
-BASE_URL=/your/deployment/path make book-build
-```
-
-The GitHub Pages workflow uses `BASE_URL=/jupyter-book-marimo`.
-
-The docs in `docs/` are the application surface for this plugin. Keep them small and
-exercise the real Jupyter Book executable plugin path.
-
-`docs/tutorials/` is generated from upstream marimo tutorials. Do not edit those files
-by hand in this repository. Change the upstream source or the export script instead.
-Keep repo-owned documentation changes in `docs/api/`, `docs/index.md`, `docs/myst.yml`,
-and `docs/styles/`.
-
-Keep this repo focused on the marimo + Jupyter Book integration. For general Jupyter
-Book build, hosting, and publishing mechanics, point contributors to the official docs:
-https://jupyterbook.org/stable/build-and-publish/
-
-The widget source of truth is `widget/`. `make build` regenerates the packaged bundle
-before building the Python artifacts. Use `make widget-build` when you only need to
-refresh `src/jupyter_book_marimo/assets/container-widget.mjs`.
-
-Do not manually edit generated widget copies:
-`src/jupyter_book_marimo/assets/container-widget.mjs` or
-`docs/.jupyter-book-marimo/container-widget.mjs`.
-
-## Project Structure
+## Repository map
 
 ```text
 jupyter-book-marimo/
 ├── src/jupyter_book_marimo/
-│   ├── plugin.py                 # MyST executable plugin entrypoint
-│   ├── authoring.py              # directive validation and execution options
-│   ├── extract.py                # marimo execution and island export
-│   ├── runtime.py                # subprocess extraction and uv sandbox execution
-│   └── assets/container-widget.mjs # generated Deno bundle packaged at runtime
-├── widget/                       # TypeScript source for the anywidget bridge
-├── scripts/bundle_widget.py      # Deno bundle writer for the packaged bridge
-├── tests/                        # pytest unit tests
-├── docs/                         # Jupyter Book docs application surface
-└── Makefile
+│   ├── authoring.py       # MyST directive normalization
+│   ├── document.py        # document collection and page identity
+│   ├── protocol.py        # page request and compiled page types
+│   ├── compiler.py        # vendored host-neutral page compiler
+│   ├── runner.py          # Python environment selection
+│   ├── projection.py      # compiled page to MyST anywidget nodes
+│   ├── plugin.py          # executable plugin protocol
+│   └── assets/            # package resource namespace
+├── widget/                # anywidget adapter for the mdx-marimo bridge
+├── scripts/
+│   ├── bundle_widget.py   # browser asset bundler
+│   └── hatch_build.py     # wheel asset build hook
+├── tests/
+└── docs/
 ```
 
-## Browser Validation
+The widget source lives in `widget/`. `make widget-build` writes ignored local copies at
+`src/jupyter_book_marimo/assets/container-widget.mjs` and
+`src/jupyter_book_marimo/assets/islands-bridge.css`. Hatch runs the same bundler while
+building a wheel and includes both files as package resources.
 
-Unit tests cover parsing and extraction contracts. They do not fully cover Jupyter Book
-hydration, shadow-root rendering, theme behavior, or client-side navigation. For changes
-touching `container-widget.mjs`, island output, docs styling, or page navigation, build
-the book and check it in a browser.
+`src/jupyter_book_marimo/compiler.py` is copied unchanged from mdx-marimo's
+[`packages/islands-compiler/compiler.py`](https://github.com/marimo-team/mdx-marimo/blob/main/packages/islands-compiler/compiler.py).
+Jupyter Book owns directive collection, environment selection, MyST projection, and
+widget integration around that compiler.
 
-Local browser check:
+The generated `.jupyter-book-marimo/` directory is MyST staging output. Edit `widget/`
+or the shared bridge stylesheet, then rebuild.
+
+`docs/tutorials/` is generated from upstream marimo tutorials. Keep repository-owned
+documentation changes in `docs/api/`, `docs/index.md`, `docs/myst.yml`, and
+`docs/styles/`.
+
+## Browser validation
+
+Changes to compilation, projection, browser mounting, styling, packaging, or navigation
+require a built-book browser check:
 
 ```bash
 make book-build
 make book-start
 ```
 
-Then open `http://localhost:3102`, interact with the index slider, toggle light/dark
-mode, and click through the tutorial pages.
+Open `http://localhost:3102`, interact with the index slider, toggle light and dark
+themes, and navigate between pages containing marimo cells. Confirm that the next page
+hydrates from the retained runtime and that back navigation restores an interactive
+page.
 
 ## Releases
 
-Releases are cut from a clean `main` branch with an explicit final version such as
-`./scripts/release.sh 0.1.0`, or with `./scripts/release.sh patch` or
-`./scripts/release.sh minor` after the package is on a final version. The script bumps
-`pyproject.toml`, refreshes `uv.lock`, runs `make check`, commits the version, and
-creates a semver tag. See `releasing.md` for the full release gate and workflow.
-
-Pushing the tag starts `.github/workflows/publish.yml`. The workflow builds the package,
-uploads `dist`, publishes with `uv publish --trusted-publishing always`, and creates
-GitHub release notes. PyPI Trusted Publishing is configured for the `pypi` GitHub
-environment.
-
-## Submitting a Pull Request
-
-1. Fork the repo and create a branch from `main`.
-2. Make your changes and add tests for new behavior.
-3. Run `make check`.
-4. Run a browser check for docs, plugin, runtime, widget, styling, or navigation
-   changes.
-5. Open a PR. The template lists the expected checks.
-
-Every bug fix should include a regression test when unit tests can cover the behavior.
-Browser-only regressions should include a clear manual validation note.
+Run `./scripts/release.sh 0.1.0` for an explicit release or use `patch` and `minor`
+after the first final version. The script updates the version, runs `make check`,
+creates the release commit, and creates the tag. See [releasing.md](releasing.md).

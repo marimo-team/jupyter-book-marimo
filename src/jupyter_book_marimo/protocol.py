@@ -217,7 +217,6 @@ class MarimoPageRuntime:
     runtime_cell_count: int
     assets: JsonObject
     notebook_code: str = ""
-    runtime_payload: Any = None
 
     def to_json(self) -> JsonObject:
         payload: JsonObject = {
@@ -227,8 +226,6 @@ class MarimoPageRuntime:
         }
         if self.notebook_code:
             payload["notebookCode"] = self.notebook_code
-        if self.runtime_payload is not None:
-            payload["runtimePayload"] = self.runtime_payload
         return payload
 
     @classmethod
@@ -253,7 +250,6 @@ class MarimoPageRuntime:
             runtime_cell_count=runtime_cell_count,
             assets=dict(assets),
             notebook_code=notebook_code,
-            runtime_payload=payload.get("runtimePayload"),
         )
 
 
