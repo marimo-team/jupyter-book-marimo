@@ -4,7 +4,8 @@ version: 1
 project:
   id: e26b9be9-1ef3-4e13-b184-659841b4701c
   title: jupyter-book-marimo
-  description: Render marimo cells as hydrated islands in Jupyter Book
+  description: Python, SQL, and Markdown cells share one marimo app across each page.
+  thumbnail: ./assets/brand/jupyter-book-marimo-og.png
   github: https://github.com/marimo-team/jupyter-book-marimo
   keywords:
     - marimo
@@ -16,6 +17,8 @@ project:
     - .jupyter-book-marimo/**
     - _build/**
     - _site/**
+  static_files:
+    - assets
   plugins:
     - type: executable
       path: ../.venv/bin/jupyter-book-marimo
@@ -51,6 +54,10 @@ site:
   title: jupyter-book-marimo
   options:
     folders: true
+    favicon: assets/brand/jupyter-book-marimo-favicon.ico
+    logo: assets/brand/jupyter-book-marimo-mark-light.svg
+    logo_dark: assets/brand/jupyter-book-marimo-mark-dark.svg
+    logo_alt: jupyter-book-marimo
     logo_text: jupyter-book-marimo
     style: styles/site.css
   nav: []

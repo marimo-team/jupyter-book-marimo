@@ -1,27 +1,42 @@
-# marimo + Jupyter Book
+<p align="center">
+  <a href="https://marimo-team.github.io/jupyter-book-marimo/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/jupyter-book-marimo/assets/brand/jupyter-book-marimo-lockup-stacked-dark.svg">
+      <img alt="jupyter-book-marimo" src="https://marimo-team.github.io/jupyter-book-marimo/assets/brand/jupyter-book-marimo-lockup-stacked-light.svg" width="320">
+    </picture>
+  </a>
+</p>
 
-marimo is a reactive Python notebook that can be embedded in static documents. This repo
-is a Jupyter Book executable plugin that lets you write marimo cells in MyST pages and
-publish a static book whose controls, tables, plots, SQL results, and dependent cells
-still respond in the browser.
+<p align="center">
+  <a href="https://github.com/marimo-team/jupyter-book-marimo/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/marimo-team/jupyter-book-marimo/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://pypi.org/project/jupyter-book-marimo/"><img alt="PyPI" src="https://img.shields.io/pypi/v/jupyter-book-marimo.svg"></a>
+  <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
+</p>
 
-Requires Python 3.10+. The package installs marimo for page execution.
+<p align="center"><strong>Make Jupyter Book pages reactive with marimo.</strong></p>
 
-## Quick Start
+[Jupyter Book](https://jupyterbook.org/) builds books and documentation sites from MyST
+Markdown and notebooks. `jupyter-book-marimo` adds reactive Python, SQL, and Markdown
+cells to its MyST pages.
 
-**1.** Install the plugin in the same environment as Jupyter Book:
+The plugin compiles each page's `{marimo}` cells into one marimo app. Jupyter Book
+places each result at its authored position and publishes the surrounding book as static
+HTML.
+
+The browser runtime then hydrates the shared app so controls and dependent cells stay
+interactive across ordinary MyST sections.
+
+Requires Python 3.10 or newer.
+
+## Quick start
+
+Install the plugin in the environment that builds the book:
 
 ```bash
 pip install jupyter-book-marimo
 ```
 
-For uv-managed projects, use:
-
-```bash
-uv add jupyter-book-marimo
-```
-
-**2.** Register the executable plugin in `myst.yml`:
+Register its executable in `myst.yml`:
 
 ```yaml
 project:
@@ -30,24 +45,17 @@ project:
       path: .venv/bin/jupyter-book-marimo
 ```
 
-Use the executable path that matches your environment. In this repo's docs site, the
-docs live in `docs/`, so the path is `../.venv/bin/jupyter-book-marimo`. On Windows, use
-`.venv/Scripts/jupyter-book-marimo.exe`, or `../.venv/Scripts/jupyter-book-marimo.exe`
-when `myst.yml` lives in `docs/`.
+Paths are resolved from `myst.yml`. On Windows, use
+`.venv/Scripts/jupyter-book-marimo.exe`. A `myst.yml` in `docs/` uses a path beginning
+with `../.venv/`.
 
-**3.** Edit a MyST page:
+Write reactive cells in a MyST page:
 
 ````markdown
----
-title: My reactive page
----
-
-# A reactive page
-
 ```{marimo} python
 import marimo as mo
 
-slider = mo.ui.slider(start=1, stop=10, step=1, label="items")
+slider = mo.ui.slider(start=1, stop=10, label="items")
 slider
 ```
 
@@ -56,7 +64,17 @@ mo.md(f"The slider is set to **{slider.value}**.")
 ```
 ````
 
-Set page defaults or page-local dependencies with `{marimo-config}`:
+Build the book:
+
+```bash
+jupyter-book build --html
+```
+
+The plugin compiles every page into one marimo app. Each visible cell becomes an island
+backed by that shared app, so dataflow continues across ordinary MyST sections. The
+static output renders before the browser runtime starts.
+
+Use `{marimo-config}` for page defaults, setup code, and dependencies:
 
 ````markdown
 ```{marimo-config}
@@ -67,24 +85,9 @@ Set page defaults or page-local dependencies with `{marimo-config}`:
 ```
 ````
 
-**4.** Build the book:
+## Documentation
 
-```bash
-jupyter-book build --html
-```
+Read the [user documentation](https://marimo-team.github.io/jupyter-book-marimo/) for
+authoring options, page configuration, styling, and runtime assets.
 
-## Features
-
-`jupyter-book-marimo` uses
-[marimo islands](https://docs.marimo.io/guides/exporting/#islands-in-action) so reactive
-notebook content can live between ordinary book sections. The plugin supports Python,
-SQL, and Markdown cells, page-level execution defaults, page-local dependencies, custom
-styling hooks, and static HTML output that hydrates into interactive marimo components
-on load.
-
-## Docs
-
-Read the user docs at
-[marimo-team.github.io/jupyter-book-marimo](https://marimo-team.github.io/jupyter-book-marimo/).
-
-For the full local development workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local development.
