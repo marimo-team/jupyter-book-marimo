@@ -1,81 +1,48 @@
 ---
-title: Styling hooks
+title: Styling
 ---
 
-# Styling hooks
+# Styling
 
-The plugin wraps each rendered island in `.marimo-jupyter-book-output`. That class is
-the public CSS contract for book themes.
+The browser bridge marks every mounted output with `.marimo-island-host` and
+`data-marimo-host="jupyter-book"`. Set the public island tokens in the stylesheet
+configured by your Jupyter Book theme:
 
 ```css
-.marimo-jupyter-book-output {
-  --jbm-background: var(--myst-color-background);
-  --jbm-foreground: var(--myst-color-text);
-  --jbm-surface: var(--myst-color-surface);
-  --jbm-muted-surface: color-mix(
-    in srgb,
-    var(--jbm-foreground) 6%,
-    var(--jbm-background)
-  );
-  --jbm-raised-surface: color-mix(
-    in srgb,
-    var(--jbm-foreground) 3%,
-    var(--jbm-background)
-  );
-  --jbm-border: var(--myst-color-border);
-  --jbm-muted-foreground: var(--myst-color-text-muted);
-  --jbm-link: var(--myst-color-link);
-  --jbm-accent: var(--myst-color-primary);
-  --jbm-accent-foreground: var(--myst-color-on-primary);
-  --jbm-focus-ring: var(--myst-color-primary);
-  --jbm-code-bg: var(--myst-color-code-background);
-  --jbm-code-fg: var(--myst-color-text);
-  --jbm-code-border: var(--myst-color-border);
-  --jbm-inline-code-bg: color-mix(in srgb, var(--jbm-accent) 10%, transparent);
-  --jbm-inline-code-fg: var(--myst-color-text);
-  --jbm-hover-bg: color-mix(in srgb, var(--jbm-foreground) 8%, transparent);
-  --jbm-selection-bg: color-mix(in srgb, var(--jbm-accent) 28%, transparent);
+.marimo-island-host[data-marimo-host="jupyter-book"] {
+  --marimo-island-background: var(--myst-color-background);
+  --marimo-island-foreground: var(--myst-color-text);
+  --marimo-island-surface: var(--myst-color-background);
+  --marimo-island-muted-surface: var(--myst-color-background-muted);
+  --marimo-island-muted-foreground: var(--myst-color-text-muted);
+  --marimo-island-border: var(--myst-color-border);
+  --marimo-island-accent: var(--myst-color-primary);
+  --marimo-island-code-background: var(--myst-color-code-background);
+  --marimo-island-margin-block: 1rem;
 }
 ```
 
-Set those variables from your book theme. Selectors that depend on marimo's internal DOM
-are outside the public contract and may break when marimo changes its island markup.
+Available tokens:
 
-## Custom Stylesheets
+| Token                               | Controls                     |
+| ----------------------------------- | ---------------------------- |
+| `--marimo-island-background`        | Page-level island background |
+| `--marimo-island-foreground`        | Primary text                 |
+| `--marimo-island-surface`           | Inputs and raised surfaces   |
+| `--marimo-island-muted-surface`     | Muted containers             |
+| `--marimo-island-muted-foreground`  | Secondary text               |
+| `--marimo-island-border`            | Borders                      |
+| `--marimo-island-accent`            | Links and active controls    |
+| `--marimo-island-accent-foreground` | Text on accent surfaces      |
+| `--marimo-island-focus-ring`        | Keyboard focus               |
+| `--marimo-island-code-background`   | Code blocks                  |
+| `--marimo-island-code-foreground`   | Code text                    |
+| `--marimo-island-error-background`  | Error surfaces               |
+| `--marimo-island-error-border`      | Error borders                |
+| `--marimo-island-error-foreground`  | Error text                   |
+| `--marimo-island-error-accent`      | Error summaries              |
+| `--marimo-island-radius`            | Island corners               |
+| `--marimo-island-margin-block`      | Vertical spacing             |
 
-The executable accepts custom stylesheets through the `JUPYTER_BOOK_MARIMO_STYLESHEETS`
-environment variable or repeated `--style` arguments. Use custom stylesheets when a book
-needs marimo-specific styling inside nested shadow roots.
-
-Accepted values:
-
-| Value                            | Behavior                                                   |
-| -------------------------------- | ---------------------------------------------------------- |
-| `https://example.com/marimo.css` | Kept as an external stylesheet URL                         |
-| `/assets/marimo.css`             | Kept as a root-relative book URL when no local file exists |
-| `styles/jupyter-book-marimo.css` | Read from the build directory and embedded in the model    |
-| `file:///path/to/marimo.css`     | Read from the filesystem and embedded in the model         |
-| `/absolute/path/to/marimo.css`   | Embedded when the file exists on the build machine         |
-
-Embedded stylesheets are copied into the anywidget model and injected into marimo shadow
-roots by the bridge.
-
-Set a comma-separated environment variable for one or more stylesheets:
-
-```bash
-JUPYTER_BOOK_MARIMO_STYLESHEETS="styles/jupyter-book-marimo.css,https://example.com/marimo.css" \
-  jupyter-book build --html
-```
-
-The environment variable also accepts a JSON string list:
-
-```bash
-JUPYTER_BOOK_MARIMO_STYLESHEETS='["styles/jupyter-book-marimo.css"]' \
-  jupyter-book build --html
-```
-
-In this repository, the Makefile forwards `JBM_STYLESHEETS` to the docs build:
-
-```bash
-JBM_STYLESHEETS="styles/jupyter-book-marimo.css" make book-build
-```
+Theme mode follows the active book theme. Token overrides cascade into the island host
+and the bridge propagates the resolved theme to marimo shadow roots.

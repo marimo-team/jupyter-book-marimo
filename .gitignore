@@ -15,4 +15,7 @@ _site/
 docs/tutorials/__marimo__/
 dist/
 
+src/jupyter_book_marimo/assets/*
+!src/jupyter_book_marimo/assets/__init__.py
+
 *.log
