@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Software Development :: Documentation",
 ]
 dependencies = [
-    "marimo>=0.23.8",
+    "marimo>=0.23.15",
     "uv",
 ]
 
@@ -55,4 +55,5 @@ build-backend = "uv_build"
 source-include = ["deno.json", "deno.lock", "scripts/bundle_widget.py", "widget/**"]
 
 [tool.uv]
-exclude-newer = "2d"
+exclude-newer = "7 days"
+exclude-newer-package = { marimo = false }
