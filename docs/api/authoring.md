@@ -94,10 +94,10 @@ WHERE value > 10
 
 SQL options:
 
-| Option     | Type   | Default | Behavior                                       |
-| ---------- | ------ | ------- | ---------------------------------------------- |
-| `:query:`  | string | `_df`   | Python variable name for the SQL result        |
-| `:engine:` | string | none    | Python expression naming the marimo SQL engine |
+| Option     | Type   | Default | Behavior                                         |
+| ---------- | ------ | ------- | ------------------------------------------------ |
+| `:query:`  | string | `_df`   | Python variable name for the SQL result          |
+| `:engine:` | string | none    | Python identifier bound to the marimo SQL engine |
 
 `query` and `engine` are SQL-only options. If `query` is missing or is not a valid
 Python identifier, the plugin uses `_df`.

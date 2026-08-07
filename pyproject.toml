@@ -33,6 +33,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "deno>=2.8",
+    "hatchling>=1.27",
     "jupyter-book>=2.1",
     "pytest>=9",
     "ruff>=0.15",
@@ -48,11 +49,21 @@ Issues = "https://github.com/marimo-team/jupyter-book-marimo/issues"
 jupyter-book-marimo = "jupyter_book_marimo.__main__:main"
 
 [build-system]
-requires = ["uv_build>=0.12.0,<0.13.0"]
-build-backend = "uv_build"
+requires = [
+    "deno>=2.8",
+    "hatchling>=1.27",
+]
+build-backend = "hatchling.build"
 
-[tool.uv.build-backend]
-source-include = ["deno.json", "deno.lock", "scripts/bundle_widget.py", "widget/**"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/jupyter_book_marimo"]
+artifacts = [
+    "src/jupyter_book_marimo/assets/container-widget.mjs",
+    "src/jupyter_book_marimo/assets/islands-bridge.css",
+]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "scripts/hatch_build.py"
 
 [tool.uv]
 exclude-newer = "7 days"

@@ -1,8 +1,17 @@
 {
   "lock": "deno.lock",
+  "nodeModulesDir": "none",
+  "minimumDependencyAge": {
+    "age": "P1D",
+    "exclude": ["npm:@marimo-team/*"]
+  },
+  "unstable": ["sloppy-imports"],
   "imports": {
-    "linkedom": "npm:linkedom@0.18.13",
-    "lz-string": "npm:lz-string@1.5.0"
+    "@marimo-team/mdx-marimo/bridge/browser": "npm:@marimo-team/mdx-marimo@0.0.5/bridge/browser",
+    "@marimo-team/mdx-marimo/bridge/element": "npm:@marimo-team/mdx-marimo@0.0.5/bridge/element",
+    "@marimo-team/mdx-marimo/bridge/protocol": "npm:@marimo-team/mdx-marimo@0.0.5/bridge/protocol",
+    "@marimo-team/mdx-marimo/styles.css": "npm:@marimo-team/mdx-marimo@0.0.5/styles.css",
+    "linkedom": "npm:linkedom@0.18.13"
   },
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "es2022"],
