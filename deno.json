@@ -11,7 +11,7 @@
     "@marimo-team/mdx-marimo/bridge/element": "npm:@marimo-team/mdx-marimo@0.0.5/bridge/element",
     "@marimo-team/mdx-marimo/bridge/protocol": "npm:@marimo-team/mdx-marimo@0.0.5/bridge/protocol",
     "@marimo-team/mdx-marimo/styles.css": "npm:@marimo-team/mdx-marimo@0.0.5/styles.css",
-    "linkedom": "npm:linkedom@0.18.13"
+    "linkedom": "npm:linkedom@0.18.14"
   },
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "es2022"],
