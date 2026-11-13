@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   build:
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -37,7 +37,7 @@ jobs:
 
   publish:
     needs: build
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     environment: pypi
     permissions:
       contents: read
@@ -58,7 +58,7 @@ jobs:
 
   release-notes:
     needs: publish
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     permissions:
       contents: write
     steps:
