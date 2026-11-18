@@ -50,7 +50,7 @@ project:
         - file: tutorials/for_jupyter_users.md
 
 site:
-  template: book-theme
+  template: https://github.com/jupyter-book/myst-theme/releases/download/myst-to-react%401.4.1/book-theme.zip
   title: jupyter-book-marimo
   options:
     folders: true
