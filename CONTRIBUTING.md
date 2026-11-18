@@ -87,4 +87,4 @@ page.
 
 ## Releases
 
-See [Releases](RELEASING.md) for the release PR workflow.
+See [Releases](releasing.md) for the release PR workflow.
