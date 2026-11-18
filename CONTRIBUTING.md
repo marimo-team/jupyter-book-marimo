@@ -87,6 +87,4 @@ page.
 
 ## Releases
 
-Run `./scripts/release.sh 0.1.0` for an explicit release or use `patch` and `minor`
-after the first final version. The script updates the version, runs `make check`,
-creates the release commit, and creates the tag. See [releasing.md](releasing.md).
+See [Releases](RELEASING.md) to request, review, and publish a version through a release PR.
