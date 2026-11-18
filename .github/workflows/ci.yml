@@ -75,7 +75,7 @@ jobs:
               - type: executable
                 path: ../.venv/Scripts/jupyter-book-marimo.exe
           site:
-            template: book-theme
+            template: https://github.com/jupyter-book/myst-theme/releases/download/myst-to-react%401.4.1/book-theme.zip
           '@ | Set-Content .windows-smoke/myst.yml
           @'
           # Windows smoke test
