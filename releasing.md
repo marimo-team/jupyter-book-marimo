@@ -17,7 +17,7 @@ Install Node 22+, Git, Docker with a running local daemon, and the shared
 [`gh release-control` command](https://github.com/marimo-team/internal-gh-actions#release-command).
 Authenticate with `gh auth login`.
 
-The shortcut prepares fresh `main` in a credential-free Docker container and opens the PR
-using your GitHub login. Your checkout stays untouched. Normal PR review and CI still apply.
-Use `gh release-control request patch --dry-run` to validate without creating a PR.
-Use `gh release-control status` to follow the PR, final approval, and publication.
+The shortcut prepares fresh `main` in a credential-free Docker container and opens the
+PR using your GitHub login. Your checkout stays untouched. Normal PR review and CI still
+apply. Use `gh release-control request patch --dry-run` to validate without creating a
+PR. Use `gh release-control status` to follow the PR, final approval, and publication.
